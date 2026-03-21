@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#111111">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>VIT Bhopal Question Papers (PYQs) — Course-wise Past Papers</title>
+    <meta name="description" content="VIT Bhopal question papers repository: search and upload course-wise PYQs, midterm and term-end papers for VITB courses.">
+    <meta name="keywords" content="VIT Bhopal question papers, VITB question papers, VIT question papers, VITB PYQ, VIT Bhopal PYQ, VITB past year papers, course title VITB questions">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <meta name="author" content="VIT Bhopal PYQs">
+    <link rel="canonical" href="https://ques-paper-repo.vercel.app/">
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <link rel="apple-touch-icon" href="/static/logo.png">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="VIT Bhopal Question Papers (PYQs)">
+    <meta property="og:description" content="Search and upload VIT Bhopal course-wise question papers, including midterm and term-end papers.">
+    <meta property="og:url" content="https://ques-paper-repo.vercel.app/">
+    <meta property="og:image" content="https://ques-paper-repo.vercel.app/static/logo.png">
+    <meta property="og:site_name" content="VIT Bhopal PYQs">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="VIT Bhopal Question Papers (PYQs)">
+    <meta name="twitter:description" content="Find VITB question papers by course title or course code.">
+    <meta name="twitter:image" content="https://ques-paper-repo.vercel.app/static/logo.png">
+
+    <link rel="stylesheet" href="static/css/style.css">
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Material Symbols (icons) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    
+    <!-- External Dependencies -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- PDF.js for mobile-compatible PDF preview -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+        <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "VIT Bhopal PYQs",
+            "url": "https://ques-paper-repo.vercel.app/",
+            "description": "Course-wise VIT Bhopal question papers repository for PYQs, midterm and term-end papers.",
+            "inLanguage": "en",
+            "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://ques-paper-repo.vercel.app/?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+            }
+        }
+        </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <span class="material-symbols-outlined brand-icon">school</span>
+                <div class="brand-text">
+                    <h1>VIT Bhopal PYQs</h1>
+                    <span class="brand-sub">Question Paper Repository</span>
+                </div>
+            </div>
+            <div class="tabs">
+                <button id="tab-upload" class="tab-btn active">
+                    <span class="material-symbols-outlined tab-icon">upload</span>
+                    Scan &amp; Upload
+                </button>
+                <button id="tab-search" class="tab-btn">
+                    <span class="material-symbols-outlined tab-icon">search</span>
+                    Search Papers
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Rate limit banner -->
+            <div id="rate-limit-banner" class="hidden rate-limit-banner">
+                <span class="material-symbols-outlined">warning</span>
+                <span>Daily upload limit reached (20/day). Come back tomorrow!</span>
+            </div>
+
+            <!-- 1. UPLOAD VIEW -->
+            <div id="upload-view">
+                <p class="section-desc">
+                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">info</span>
+                    Capture or upload multiple pages of a question paper to scan &amp; archive.
+                </p>
+                <div class="upload-section upload-actions">
+                    <button class="btn btn-primary" id="btn-camera">
+                        <span class="material-symbols-outlined btn-icon">photo_camera</span>Take Photo
+                    </button>
+                    <button class="btn btn-secondary" id="btn-upload">
+                        <span class="material-symbols-outlined btn-icon">photo_library</span>Upload Images
+                    </button>
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" />
+                    <input type="file" id="file-input-multi" accept="image/*" multiple class="hidden" />
+                </div>
+            </div>
+
+            <!-- 2. ARRANGE VIEW -->
+            <div id="arrange-view" class="hidden">
+                <p class="section-desc">Drag to reorder pages. Tap a page to adjust crop corners.</p>
+                <div id="pages-grid" class="pages-grid"></div>
+                <div class="actions-row">
+                    <button id="btn-add-camera" class="btn btn-secondary btn-sm btn-flex-1">
+                        <span class="material-symbols-outlined btn-icon-sm">photo_camera</span>Camera
+                    </button>
+                    <button id="btn-add-gallery" class="btn btn-secondary btn-sm btn-flex-1">
+                        <span class="material-symbols-outlined btn-icon-sm">add_photo_alternate</span>Gallery
+                    </button>
+                    <button id="btn-next-metadata" class="btn btn-primary btn-sm btn-flex-2" disabled>
+                        Next <span class="material-symbols-outlined btn-icon-sm">arrow_forward</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. CROP VIEW (Fullscreen Overlay) -->
+            <div id="crop-view" class="hidden fullscreen-overlay">
+                <div class="crop-header">
+                    <h3 id="crop-title">Adjust Corners</h3>
+                    <div id="crop-actions-1">
+                        <button id="btn-cancel-crop" class="btn btn-secondary btn-sm">Cancel</button>
+                        <button id="btn-preview-crop" class="btn btn-primary btn-sm">Preview</button>
+                    </div>
+                    <div id="crop-actions-2" class="hidden">
+                        <button id="btn-redo-crop" class="btn btn-secondary btn-sm">Redo</button>
+                        <button id="btn-apply-crop" class="btn btn-primary btn-sm">Save Crop</button>
+                    </div>
+                </div>
+                <!-- Editor Container -->
+                <div class="crop-container" id="crop-container" style="position: relative;">
+                    <canvas id="crop-canvas"></canvas>
+                    <!-- Corner handles -->
+                    <div class="crop-handle crop-handle--corner" id="handle-tl"></div>
+                    <div class="crop-handle crop-handle--corner" id="handle-tr"></div>
+                    <div class="crop-handle crop-handle--corner" id="handle-bl"></div>
+                    <div class="crop-handle crop-handle--corner" id="handle-br"></div>
+                    <!-- Edge handles (move whole edge) -->
+                    <div class="crop-handle crop-handle--edge" id="handle-top"></div>
+                    <div class="crop-handle crop-handle--edge" id="handle-right"></div>
+                    <div class="crop-handle crop-handle--edge" id="handle-bottom"></div>
+                    <div class="crop-handle crop-handle--edge" id="handle-left"></div>
+                    
+                    <button id="btn-rotate-left" class="rotate-btn rotate-btn--left">↺</button>
+                    <button id="btn-rotate-right" class="rotate-btn rotate-btn--right">↻</button>
+                </div>
+                <!-- Preview Container -->
+                <div class="crop-container hidden preview-wrapper" id="preview-container">
+                    <canvas id="preview-canvas"></canvas>
+                </div>
+                <p id="opencv-status" class="status-msg">Initializing Smart Crop...</p>
+            </div>
+
+            <!-- 4. METADATA (OCR) VIEW -->
+            <div id="metadata-view" class="hidden">
+                <div id="metadata-loading">
+                    <p>
+                        <span class="material-symbols-outlined" style="vertical-align:-4px;font-size:1.1rem;">document_scanner</span>
+                        Extracting Subject from Page 1...
+                    </p>
+                    <div class="loader"></div>
+                </div>
+                
+                <form id="metadata-form" class="hidden">
+                    <p class="section-desc">Verify extracted course data from the first page.</p>
+                    <div id="ocr-warning" class="ocr-warning hidden"></div>
+                    <div class="form-group custom-select-container" id="course-select-container">
+                        <label>
+                            <span class="material-symbols-outlined label-icon">menu_book</span>
+                            Course (Search or Select)
+                        </label>
+                        <div class="custom-select-header" id="course-select-header">
+                            <span id="course-select-text">Select a course...</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="custom-select-dropdown hidden" id="course-select-dropdown">
+                            <div style="padding: 10px; border-bottom: 1px solid #ddd;">
+                                <input type="text" id="course-search-input" placeholder="Search course..." autocomplete="off" style="margin-bottom: 0;">
+                            </div>
+                            <ul id="course-options-list" class="custom-options-list"></ul>
+                        </div>
+                        <input type="hidden" id="course-title" name="course_title" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="exam-name">
+                            <span class="material-symbols-outlined label-icon">event</span>
+                            Exam Type
+                        </label>
+                        <select id="exam-name" name="exam_name" required>
+                            <option value="" disabled selected>Select Exam</option>
+                            <option value="Midterm">Mid-term Exam</option>
+                            <option value="Term End">Term-End Exam</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group hidden">
+                        <textarea id="extracted-text-pg1" name="extracted_text_pg1" rows="3" readonly></textarea>
+                    </div>
+
+                    <div id="duplicate-warning" class="hidden"></div>
+
+                    <button type="submit" id="btn-upload-final" class="btn btn-primary">
+                        <span class="material-symbols-outlined btn-icon">cloud_upload</span>
+                        Process All Pages &amp; Upload
+                    </button>
+                </form>
+            </div>
+
+            <!-- 5. FINAL PROCESSING VIEW -->
+            <div id="processing-view" class="hidden text-center">
+                <span class="material-symbols-outlined processing-icon">hourglass_top</span>
+                <h3 id="processing-title">Processing Document</h3>
+                <p id="processing-status">Preparing pages...</p>
+                <div class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+            </div>
+
+            <!-- SEARCH VIEW -->
+            <div id="search-view" class="hidden">
+                <p class="section-desc">Browse past year question papers for VIT Bhopal courses.</p>
+                
+                <div id="search-navigation" class="search-nav hidden">
+                    <button id="btn-search-back" class="btn btn-secondary btn-sm">
+                        <span class="material-symbols-outlined btn-icon-sm">arrow_back</span>Back
+                    </button>
+                    <span id="search-breadcrumb" class="search-breadcrumb"></span>
+                </div>
+                
+                <div class="form-group search-bar-group" id="search-bar-container">
+                    <span class="material-symbols-outlined search-icon">search</span>
+                    <input type="text" id="search-input" placeholder="Search subjects or course codes...">
+                </div>
+                
+                <div id="search-results" class="results-grid"></div>
+            </div>
+
+            <div id="global-message"></div>
+        </main>
+
+        <footer class="app-footer">
+            <span class="material-symbols-outlined" style="font-size:0.9rem;vertical-align:-2px;">favorite</span>
+            Made for VIT Bhopal students &nbsp;·&nbsp; Open source
+            <button id="btn-support" class="footer-support-btn" type="button">Contact Me</button>
+        </footer>
+    </div>
+
+    <div id="report-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Report Paper</h3>
+                <button class="modal-close" data-close-modal="report" type="button">×</button>
+            </div>
+            <p class="modal-desc">Are you sure you want to report this paper?</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-close-modal="report" type="button">Cancel</button>
+                <button id="btn-send-report" class="btn btn-primary" type="button">Yes, Report</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="support-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Support Message</h3>
+                <button class="modal-close" data-close-modal="support" type="button">×</button>
+            </div>
+            <p class="modal-desc">Share your message. Max 500 characters.</p>
+            <textarea id="support-message" maxlength="500" placeholder="Write your message..."></textarea>
+            <div class="modal-meta">
+                <span id="support-char-count">0/500</span>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-close-modal="support" type="button">Cancel</button>
+                <button id="btn-send-support" class="btn btn-primary" type="button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase App Logic -->
+    <script type="module" src="static/js/app.js"></script>
+</body>
+</html>

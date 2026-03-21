@@ -1,0 +1,236 @@
+Course Code,Course Title
+CSA2003,Digital Logic and Computer Architecture
+CSA3006,Data Mining and Data Warehousing
+CSA3007,Deep Learning
+CSA4002,Artificial Neural Networks
+CSA4008,Applied Machine Learning
+CSA4028,Natural Language Processing
+CSA4029,Reinforcement and Representation Learning
+CSD3009,Data Structures and Analysis of Algorithms
+CSE2001,Object Oriented Programming With C++
+CSE2004,Theory Of Computation And Compiler Design
+CSE3001,Database Management Systems
+CSE3003,Operating System
+CSE3006,Computer Networks
+CSE3011,Python Programming
+CSA3001,Agent Based Intelligent Systems
+CSA3004,Data Visualization
+CSA3010,AI in Industry 4.0
+CSA3011,Bayesian Data Analysis
+CSA3012,Immersive Multimedia
+CSA3013,Surveillance video analytics and Image Processing
+CSA3015,R Programming
+CSA3017,Knowledge Engineering
+CSA3018,Computer Vision for Autonomous Vehicles
+CSA3019,Pervasive AI for IoT Applications
+CSA3020,Generative AI
+CSA3021,Drone Technology
+CSA3022,Internet of Things and its Applications
+CSA4005,Expert Systems and Fuzzy Logic
+CSA4007,Cognitive Analytics
+CSA4010,Data Analytics Using Scala Programming
+CSA4011,Information Retrieval and Web Search
+CSA4012,Introduction to Brain and Neuro Science
+CSA4015,Computational Intelligence
+CSA4016,Hardware Architecture for Machine Learning
+CSA4019,Machine Learning with Big Data
+CSA4021,Graph Analytics for Big Data
+CSA4022,Parallel and Distributed Systems
+CSA4023,Speech System
+CSA4024,Theoretical and Computational Neuroscience
+CSA4030,Predictive and Time Series Analysis
+CSE3010,Computer Vision
+CSE3015,AWS Cloud Practitioner
+CSE3016,AWS Solution Architect
+CSE3017,Salesforce
+CHY1005,Introduction to Computational chemistry
+MAT1001,Calculus and Laplace Transforms
+MAT2002,Discrete Mathematics And Graph Theory
+MAT3002,Applied Linear Algebra
+MAT3003,Probability, Statistics And Reliability
+PHY1001,Engineering Physics
+CSA2001,Fundamentals in AI & ML
+EEE1001,Electric Circuits and Systems
+MEE2014,Engineering Design and Modelling
+CSE1021,Introduction to Problem Solving and Programming
+CSE2006,Programming in Java
+PLA1004,Competitive Coding Practices
+PLA1006,Lateral Thinking
+SST1003,Professional Communication Skills for Engineers
+SST2003,Dynamics of workplace communication Skills
+CHY1006,Environmental Sustainability
+ENG1004,Effective Technical Communication
+ENG2005,Advanced Technical Communication
+DSN2092,Summer Industrial Internship
+DSN2093,Semester Internship
+DSN2098,Project Exhibition – I
+DSN2099,Project Exhibition – II
+DSN3099,Engineering Project in Community Service
+DSN4091,Capstone Project - Phase 1
+DSN4092,Capstone Project - Phase 2
+MAT2001,Differential And Difference Equations
+MAT2003,Applied Numerical methods
+MAT2004,Operations Research
+MAT3004,Random Process
+MAT3008,Computational Game Theory
+MAT3016,Stochastic Process
+MAT3017,Statistical Inferences and Series of Functions
+BIO1501,Bio Inspired Design
+CDS3005,Foundations of Data Science
+CSD3010,Cyber Physical Systems
+CSG2003,Human Computer Interaction
+EAC4012,Body Area Networks
+ECE4006,Sensors And Iot
+ENG3001,Introduction to Computational Linguistics
+MEA3015,Unmanned Aerial Vehicles
+BMT1013,Human Resource Management
+BMT2017,International Business
+HUM1002,Emotional Intelligence
+HUM2001,Behavioural Science
+MGT1002,Principles of Management and Organizational Behaviour
+MGT2003,Technology Entrepreneurship
+CEC2001,Introduction To E-Commerce
+CHY1001,Engineering Chemistry
+CHY1007,Forensic Chemistry and Applications
+CSA3005,Cloud Computing
+CSD1001,Principles Of Digital Forensics
+CSD4002,Ethical Hacking
+CSE3007,Artificial Intelligence
+ECE2002,Digital Logic Design
+HUM2003,Foundations of Privacy and Security
+MAT1031,Introduction to calculus
+ONL1010,Applied Machine Learning in Python
+ONL1021,"HTML, CSS and JavaScript for Web Developers"
+ONL1032,IBM AI Engineering Professional Certificate
+PHY1003,Introduction to Computational Physics
+CSE0001,Digital Literacy
+CSE0002,Open Source Software (Linux Administration)
+EXC0001,Extra Curricular Activities
+HUM0002,Swachh Bharat
+HUM0003,Indian Constitution
+HUM0004,Indian Heritage
+UHV0001,Universal Human Values - I
+UHV0002,Universal Human Values - II
+CSE4001,Internet and Web Programming
+CSE3004,Design and Analysis of Algorithms
+CSE3005,Software Engineering
+ECE3004,Microprocessors and Microcontrollers
+CSE3009,Parallel and Distributed Computing
+MAT5004,Mathematical Foundations for Cyber Security
+CSD5008,Forensics Science
+CSE4012,Software Defined Network
+CHI2007,Healthcare Information Systems
+CSE3014,Medical Imaging
+CSD5002,Virtualization Essentials
+ECE6012,Pattern Recognition and Image Analysis
+ECE4011,Embedded Systems
+CSE4016,Software Project Management
+CSE4017,Software Testing
+CSE3013,Agile Software Development
+CSE3012,Mobile Application Development
+CSG2001,Augmented Reality and Virtual Reality
+NAS1001,NASSCOM Future Skills Associative Data Analyst
+NAS2001,NASSCOM Future Skills Advanced Data Analyst
+NAS1002,NASSCOM Future Skills Security Analyst I
+NAS2002,NASSCOM Future Skills Security Analyst II
+CSE4019,Advanced Java Programming
+CHY2007,Modelling and Simulation of Biological Systems
+PHY2011,Biophysics
+CSE4003,Big Data Analytics
+CSE4004,Semantic Web Technologies
+CSE3008,Soft Computing
+CSE4005,Machine Learning
+CSE4006,Knowledge Engineering
+CSD3007,Block chains and Crypto currencies
+CSD4008,Cyber Security Framework
+CSD4009,Enterprise Cyber Security
+CSD4003,Network and System Security
+CSE4008,Applied Cryptography
+CSE4009,Cyber Security
+CSE3009,Computer Graphics
+ECE4012,Digital Image Processing
+CSE4013,Pattern recognition and Image analysis
+CSE4014,Computer Animation
+CSE4015,Introduction to Vision and Robotics
+EEE3006,Robotics and Control
+CSE4007,Wireless Networks
+CSE4011,Network Security
+CSD4012,Web Security
+CSE4018,Software Quality and Reliability
+CSA6003,Algorithm for Intelligent Systems
+ASE1001,Introduction to Aerospace Engineering
+MEE1006,Basic Workshop
+MEE1007,Engineering Graphics
+MEE1002,Engineering Mechanics
+ASE1002,Thermodynamics for Aerospace Engineering
+ASE1004,Mechanics of Materials
+ASE1005,Fluid Mechanics for Aerospace Engineering
+ASE2010,Guidance, Navigation & Control
+ASE2001,Material Testing and Metrology
+ASE2004,Aircraft Manufacturing Technology
+ASF2002,Aerodynamics
+ASE3001,Aerospace Instrumentation and Maintenance
+ASF2005,Aerospace Structures
+ASE1003,Thermal and Heat Transfer for Aerospace Engineering
+ASE2007,Computer Aided Aircraft Drawing
+ASF3002,Computational Fluid Dynamics for Aerospace Engineering
+ASF2006,Aerospace Propulsion
+ASE3003,Aircraft Performance-Stability and Control
+ASF3004,Space Flight Mechanics
+ASE5001,Aerospace Vehicle Design
+DSN2096,Engineering Design
+DSN2097,Internship
+DSN4098,Comprehensive Exam
+DSN4099,Capstone Project
+ASE3005,Introduction to Control Engineering
+ASF3006,Avionics for Flights
+ASF2008,Industrial Aerodynamics
+ASE3007,Smart Materials for Aerospace
+ASE3008,Hypersonic Aerodynamics
+ASE3009,Composite Materials and Mechanics
+ASE3010,Rockets and Missile Technology
+ASE2003,Mechanisms and Machine Theory
+ASE5002,Satellite Design
+ASE4002,Aircraft Maintenance and Air Traffic Management
+ASE4003,Experimental Aerodynamics
+ASE4004,Satellite Communication and Satellite Technology
+ASE4005,Aeroelasticity
+ASE4006,Introduction to Astrophysics and Space Environment
+ASE4007,Space Vehicle Design and Simulation
+CHY1002,Environmental Science
+MAT3001,Complex Variable and Partial Differential Equation
+PHY1004,Fundamentals of Space Physics
+PHY2001,Materials Science
+PHY2002,Energy and Environmental Physics
+ENG1001,Communication for Technical Professionals
+ENG2001,Technical Writing and Composition
+STS1001,Soft Skills I
+STS2001,Soft Skills II
+EXC1001,Extra Curricular Activity
+MGT1012,Engineering Economics
+HUM1004,IT and Society
+HUM1006,Anthropology for Engineers
+PLA1001,Placement Training I
+PLA1002,Placement Training II
+CSG1001,Introduction to Game Design
+CSG1002,Game Programming
+CSG3001,Gaming Hardware fundamentals and applications
+CSG3002,Artificial Intelligence and machine learning for Gaming
+CSG2004,Computer Graphics and Multimedia
+CSG2005,Computer Vision and Robotics
+CSG4004,Multi-threaded Programming
+CSG4006,Animation Mechanics and application
+CSG4010,HTML5 Game Development
+CSG4014,Competitive Programming
+PHY1002,Game Physics
+PHY2005,Game Physics Development (Physics Engine)
+ENG2003,Interactive Narrative
+SST1002,Soft Skills for Engineers - I
+SST2002,Soft Skills for Engineers - II
+MAT3009,Design Geometry
+PHY2003,Computational Physics
+HUM1013,Indian Culture And Heritage
+HUM1014,Indian Constitution
+MGT2011,Gender, Culture and Stereotyping in Gaming
+PLA1003,Logic and Problem Solving for Engineers
+MGT2004,Supply Chain Management

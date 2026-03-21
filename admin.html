@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+</head>
+<body>
+    <div class="container" style="max-width: 960px; margin-top: 20px;">
+        <header>
+            <div class="brand" style="margin-bottom:10px;">
+                <span class="material-symbols-outlined brand-icon">admin_panel_settings</span>
+                <div class="brand-text">
+                    <h1>Admin Dashboard</h1>
+                    <span class="brand-sub">Paper moderation and support inbox</span>
+                </div>
+            </div>
+            <div style="padding-bottom: 12px;">
+                <button id="admin-logout-btn" class="btn btn-secondary btn-sm" type="button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="tabs" style="margin-bottom:16px;">
+                <button id="admin-tab-reported" class="tab-btn active" type="button">
+                    <span class="material-symbols-outlined tab-icon">flag</span>
+                    Reported Papers
+                </button>
+                <button id="admin-tab-messages" class="tab-btn" type="button">
+                    <span class="material-symbols-outlined tab-icon">mail</span>
+                    Messages
+                </button>
+                <button id="admin-tab-papers" class="tab-btn" type="button">
+                    <span class="material-symbols-outlined tab-icon">folder</span>
+                    Papers
+                </button>
+            </div>
+
+            <section id="admin-reported-view" style="margin-bottom: 22px;">
+                <div id="reported-papers-list" class="results-grid"></div>
+            </section>
+
+            <section id="admin-messages-view" class="hidden" style="margin-bottom: 22px;">
+                <div id="support-messages-list" class="results-grid"></div>
+            </section>
+
+            <section id="admin-papers-view" class="hidden">
+                <div id="admin-search-navigation" class="search-nav hidden">
+                    <button id="admin-btn-search-back" class="btn btn-secondary btn-sm" type="button">
+                        <span class="material-symbols-outlined btn-icon-sm">arrow_back</span>Back
+                    </button>
+                    <span id="admin-search-breadcrumb" class="search-breadcrumb"></span>
+                </div>
+
+                <div class="form-group search-bar-group" id="admin-search-bar-container">
+                    <span class="material-symbols-outlined search-icon">search</span>
+                    <input type="text" id="admin-search-input" placeholder="Search subjects or course codes...">
+                </div>
+
+                <div id="all-papers-list" class="results-grid"></div>
+            </section>
+
+            <div id="global-message"></div>
+        </main>
+    </div>
+
+    <script type="module" src="/static/js/admin.js"></script>
+</body>
+</html>
