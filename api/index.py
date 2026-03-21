@@ -13,17 +13,41 @@ load_dotenv()
 app = Flask(__name__, static_folder="../static", template_folder="../")
 CORS(app)
 
-courses_dict = {}
-try:
+def load_courses_dict():
+    loaded = {}
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(current_dir, 'courses.csv')
-    with open(csv_path, mode='r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if 'Course Code' in row and 'Course Title' in row:
-                courses_dict[row['Course Code'].strip().upper()] = row['Course Title'].strip()
-except Exception as e:
-    print(f"Error loading courses: {e}")
+    candidate_paths = [
+        os.path.join(current_dir, 'courses.csv'),
+        os.path.join(current_dir, '../api/courses.csv'),
+        os.path.join(os.getcwd(), 'api', 'courses.csv'),
+    ]
+
+    csv_path = None
+    for candidate in candidate_paths:
+        normalized = os.path.abspath(candidate)
+        if os.path.exists(normalized):
+            csv_path = normalized
+            break
+
+    if not csv_path:
+        print("Error loading courses: courses.csv not found in expected paths")
+        return loaded
+
+    try:
+        with open(csv_path, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if 'Course Code' in row and 'Course Title' in row:
+                    code = (row.get('Course Code') or '').strip().upper()
+                    title = (row.get('Course Title') or '').strip()
+                    if code and title:
+                        loaded[code] = title
+    except Exception as e:
+        print(f"Error loading courses from {csv_path}: {e}")
+
+    return loaded
+
+courses_dict = load_courses_dict()
 
 def get_course_details_from_csv(extracted_code, extracted_title, full_text):
     if not courses_dict:
@@ -168,7 +192,11 @@ def parse_text():
 
 @app.route('/api/courses', methods=['GET'])
 def get_courses():
+    global courses_dict
+    if not courses_dict:
+        courses_dict = load_courses_dict()
     courses_list = [f"{code} - {title}" for code, title in courses_dict.items()]
+    courses_list.sort()
     return jsonify(courses_list)
 
 @app.route('/api/config', methods=['GET'])

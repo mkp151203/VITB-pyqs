@@ -1,13 +1,77 @@
 // courses.js — Course dropdown management
+import { db, collection, getDocs } from './firebase.js';
 
 let allCoursesList = [];
 
+function normalizeCourseString(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function dedupeAndSortCourses(values) {
+    const normalized = values
+        .map(normalizeCourseString)
+        .filter(Boolean);
+    return [...new Set(normalized)].sort((a, b) => a.localeCompare(b));
+}
+
+async function loadCoursesFromApi() {
+    const res = await fetch('/api/courses');
+    if (!res.ok) throw new Error(`API failed with ${res.status}`);
+    const list = await res.json();
+    if (!Array.isArray(list)) throw new Error('Invalid /api/courses response');
+    return dedupeAndSortCourses(list);
+}
+
+async function loadCoursesFromFirestore() {
+    if (!db) return [];
+    const snapshot = await getDocs(collection(db, 'courses_catalog'));
+    const list = [];
+    snapshot.forEach((docItem) => {
+        const data = docItem.data() || {};
+        const combined = data.courseCombined || data.course || data.name;
+        if (combined) {
+            list.push(combined);
+            return;
+        }
+
+        const code = (data.courseCode || data.code || '').toString().trim();
+        const title = (data.courseTitle || data.title || '').toString().trim();
+        if (code && title) {
+            list.push(`${code} - ${title}`);
+        } else if (code) {
+            list.push(code);
+        } else if (title) {
+            list.push(title);
+        }
+    });
+    return dedupeAndSortCourses(list);
+}
+
+export async function loadCourseCatalog() {
+    try {
+        const firestoreCourses = await loadCoursesFromFirestore();
+        if (firestoreCourses.length) return firestoreCourses;
+    } catch (e) {
+        console.warn('Firestore courses_catalog unavailable, trying API fallback:', e.message || e);
+    }
+
+    try {
+        return await loadCoursesFromApi();
+    } catch (e) {
+        console.error('API course fallback failed:', e);
+        return [];
+    }
+}
+
 export async function fetchCourses() {
     try {
-        const res = await fetch('/api/courses');
-        allCoursesList = await res.json();
+        allCoursesList = await loadCourseCatalog();
         renderCourseOptions(allCoursesList);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+        allCoursesList = [];
+        renderCourseOptions(allCoursesList);
+    }
 }
 
 function renderCourseOptions(courses) {

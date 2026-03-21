@@ -1,5 +1,6 @@
 // search.js — 3-level search navigation (subjects → exam types → papers)
 import { db, collection, getDocs } from './firebase.js';
+import { loadCourseCatalog } from './courses.js';
 
 let searchArchives = [];
 let groupedBySubject = {};
@@ -23,13 +24,15 @@ export async function loadAllSearchablePapers() {
         searchArchives = [];
         querySnapshot.forEach(doc => searchArchives.push({ id: doc.id, ...doc.data() }));
         searchArchives.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        const catalog = await loadCourseCatalog();
         
         groupedBySubject = {};
         searchArchives.forEach(p => {
             const key = p.courseCode || 'UNKNOWN';
             if (!groupedBySubject[key]) {
                 groupedBySubject[key] = {
-                    courseTitle: p.courseTitle || p.courseCode,
+                    courseTitle: p.courseTitle || p.courseCode || key,
                     midterm: [],
                     termEnd: []
                 };
@@ -38,6 +41,29 @@ export async function loadAllSearchablePapers() {
                 groupedBySubject[key].midterm.push(p);
             } else {
                 groupedBySubject[key].termEnd.push(p);
+            }
+        });
+
+        catalog.forEach((entry) => {
+            const value = String(entry || '').trim();
+            if (!value) return;
+
+            let code = value;
+            let title = value;
+            if (value.includes(' - ')) {
+                const split = value.split(' - ');
+                code = (split[0] || '').trim() || value;
+                title = split.slice(1).join(' - ').trim() || value;
+            }
+
+            if (!groupedBySubject[code]) {
+                groupedBySubject[code] = {
+                    courseTitle: title,
+                    midterm: [],
+                    termEnd: []
+                };
+            } else if (!groupedBySubject[code].courseTitle || groupedBySubject[code].courseTitle === code) {
+                groupedBySubject[code].courseTitle = title;
             }
         });
         

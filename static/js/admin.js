@@ -9,6 +9,9 @@ import {
     where,
     doc,
     deleteDoc,
+    writeBatch,
+    setDoc,
+    serverTimestamp,
     ref,
     deleteObject,
     signOut,
@@ -21,6 +24,7 @@ const allPapersList = document.getElementById('all-papers-list');
 
 const adminSearchInput = document.getElementById('admin-search-input');
 const adminLogoutBtn = document.getElementById('admin-logout-btn');
+const adminSyncCoursesBtn = document.getElementById('admin-sync-courses-btn');
 const adminTabReported = document.getElementById('admin-tab-reported');
 const adminTabMessages = document.getElementById('admin-tab-messages');
 const adminTabPapers = document.getElementById('admin-tab-papers');
@@ -70,6 +74,89 @@ function formatDate(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'N/A';
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+}
+
+function normalizeCourseEntry(raw) {
+    const value = String(raw || '').trim().replace(/\s+/g, ' ');
+    if (!value) return null;
+
+    if (value.includes(' - ')) {
+        const split = value.split(' - ');
+        const code = (split[0] || '').trim().toUpperCase();
+        const title = split.slice(1).join(' - ').trim();
+        if (!code) return null;
+        return {
+            courseCode: code,
+            courseTitle: title || code,
+            courseCombined: title ? `${code} - ${title}` : code
+        };
+    }
+
+    const fallbackCode = value.split(' ')[0].toUpperCase();
+    return {
+        courseCode: fallbackCode,
+        courseTitle: value,
+        courseCombined: value
+    };
+}
+
+async function syncCoursesCatalogFromApi() {
+    if (!db) {
+        showMessage('Firestore is not configured.', 'error');
+        return;
+    }
+
+    adminSyncCoursesBtn.disabled = true;
+    showMessage('Syncing course catalog...', 'success');
+
+    try {
+        const response = await fetch('/api/courses');
+        if (!response.ok) {
+            throw new Error(`API failed with ${response.status}`);
+        }
+
+        const courses = await response.json();
+        if (!Array.isArray(courses) || !courses.length) {
+            throw new Error('No courses returned by API');
+        }
+
+        const normalized = [];
+        const seen = new Set();
+        courses.forEach((entry) => {
+            const item = normalizeCourseEntry(entry);
+            if (!item || seen.has(item.courseCode)) return;
+            seen.add(item.courseCode);
+            normalized.push(item);
+        });
+
+        let batch = writeBatch(db);
+        let count = 0;
+
+        for (const item of normalized) {
+            const docRef = doc(db, 'courses_catalog', item.courseCode.replace(/\//g, '-').replace(/\s+/g, ''));
+            batch.set(docRef, {
+                ...item,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            count++;
+            if (count % 450 === 0) {
+                await batch.commit();
+                batch = writeBatch(db);
+            }
+        }
+
+        if (count % 450 !== 0) {
+            await batch.commit();
+        }
+
+        showMessage(`Course sync complete: ${count} course(s) upserted.`, 'success');
+    } catch (error) {
+        console.error('Course sync failed', error);
+        showMessage('Course sync failed. Check /api/courses and Firestore rules.', 'error');
+    } finally {
+        adminSyncCoursesBtn.disabled = false;
+    }
 }
 
 async function isAdminUid(uid) {
@@ -473,6 +560,10 @@ adminLogoutBtn?.addEventListener('click', async () => {
     } finally {
         window.location.href = '/admin';
     }
+});
+
+adminSyncCoursesBtn?.addEventListener('click', async () => {
+    await syncCoursesCatalogFromApi();
 });
 
 if (!auth) {

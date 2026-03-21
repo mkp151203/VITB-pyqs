@@ -1,6 +1,6 @@
 // firebase.js — Firebase initialization and exports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, getDoc, query, where, doc, updateDoc, increment, arrayUnion, deleteDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, getDoc, query, where, doc, updateDoc, increment, arrayUnion, deleteDoc, orderBy, writeBatch, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-storage.js";
 import { getAuth, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
 
@@ -41,6 +41,9 @@ export {
     arrayUnion,
     deleteDoc,
     orderBy,
+    writeBatch,
+    setDoc,
+    serverTimestamp,
     ref,
     uploadBytes,
     getDownloadURL,
