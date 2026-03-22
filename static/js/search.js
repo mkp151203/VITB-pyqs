@@ -15,6 +15,65 @@ const SUBJECTS_PER_PAGE = 6;
 let currentPage = 1;
 let filteredKeys = [];
 
+function getCurrentSearchFilter() {
+    return String(document.getElementById('search-input')?.value || '').trim();
+}
+
+function pushSearchLevelState(level, extra = {}) {
+    window.history.pushState({
+        appNav: true,
+        tab: 'search',
+        searchLevel: level,
+        filter: getCurrentSearchFilter(),
+        ...extra
+    }, '', window.location.href);
+}
+
+export async function restoreSearchStateFromHistory(state) {
+    const targetLevel = String(state?.searchLevel || 'subject');
+    const targetFilter = String(state?.filter || '').toLowerCase();
+
+    if (!Object.keys(groupedBySubject).length) {
+        await loadAllSearchablePapers(targetFilter);
+    }
+
+    if (targetLevel === 'subject') {
+        currentSearchLevel = 'subject';
+        currentSelectedSubject = null;
+        currentSelectedExam = null;
+        currentSelectedSubjectCode = null;
+        currentPage = 1;
+        renderSubjects(targetFilter);
+        return;
+    }
+
+    const subjectCode = String(state?.subjectCode || '').trim();
+    const subjectData = groupedBySubject[subjectCode];
+    if (!subjectData) {
+        currentSearchLevel = 'subject';
+        currentSelectedSubject = null;
+        currentSelectedExam = null;
+        currentSelectedSubjectCode = null;
+        currentPage = 1;
+        renderSubjects(targetFilter);
+        return;
+    }
+
+    currentSelectedSubject = subjectData;
+    currentSelectedSubjectCode = subjectCode;
+
+    if (targetLevel === 'exam') {
+        currentSearchLevel = 'exam';
+        renderExamTypes();
+        return;
+    }
+
+    const targetExam = String(state?.examName || '').toLowerCase().includes('mid') ? 'Midterm' : 'Term End';
+    currentSearchLevel = 'paper';
+    currentSelectedExam = targetExam;
+    renderPapersList(targetExam === 'Midterm' ? subjectData.midterm : subjectData.termEnd);
+}
+
 function setButtonLoading(button, loading, loadingText = 'Please wait...') {
     if (!button) return;
     if (loading) {
@@ -148,6 +207,9 @@ export async function loadAllSearchablePapers(initialFilter = '') {
         
         currentSearchLevel = 'subject';
         currentPage = 1;
+        currentSelectedSubject = null;
+        currentSelectedExam = null;
+        currentSelectedSubjectCode = null;
         renderSubjects(String(initialFilter || '').toLowerCase());
     } catch(e) {
         grid.innerHTML = '<p class="error">Failed to load archives.</p>';
@@ -204,6 +266,7 @@ function renderSubjects(filterQuery = '') {
             currentSelectedSubject = data;
             currentSelectedSubjectCode = key;
             renderExamTypes();
+            pushSearchLevelState('exam', { subjectCode: key });
         });
 
         const zipCourseBtn = div.querySelector('[data-zip-course]');
@@ -292,6 +355,7 @@ function renderExamTypes() {
         currentSearchLevel = 'paper';
         currentSelectedExam = 'Midterm';
         renderPapersList(currentSelectedSubject.midterm);
+        pushSearchLevelState('paper', { subjectCode: currentSelectedSubjectCode, examName: 'Midterm' });
     });
     const midZipBtn = midDiv.querySelector('[data-zip-exam="midterm"]');
     midZipBtn?.addEventListener('click', async (event) => {
@@ -326,6 +390,7 @@ function renderExamTypes() {
         currentSearchLevel = 'paper';
         currentSelectedExam = 'Term End';
         renderPapersList(currentSelectedSubject.termEnd);
+        pushSearchLevelState('paper', { subjectCode: currentSelectedSubjectCode, examName: 'Term End' });
     });
     const termZipBtn = termDiv.querySelector('[data-zip-exam="termend"]');
     termZipBtn?.addEventListener('click', async (event) => {
@@ -510,6 +575,12 @@ async function renderPdfPreview(fileUrl, cardId) {
 }
 
 document.getElementById('btn-search-back')?.addEventListener('click', () => {
+    const currentState = window.history.state;
+    if (currentState?.appNav && currentState?.tab === 'search' && (currentState?.searchLevel === 'paper' || currentState?.searchLevel === 'exam')) {
+        window.history.back();
+        return;
+    }
+
     if (currentSearchLevel === 'paper') {
         currentSearchLevel = 'exam';
         renderExamTypes();

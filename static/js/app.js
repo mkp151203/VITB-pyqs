@@ -2,7 +2,7 @@
 
 import { fetchCourses } from './courses.js';
 import { init as initUpload, getPagesArray } from './upload.js';
-import { loadAllSearchablePapers } from './search.js';
+import { loadAllSearchablePapers, restoreSearchStateFromHistory } from './search.js';
 import { initFeedback } from './feedback.js';
 import { initRequests } from './requests.js';
 
@@ -21,6 +21,35 @@ function showView(viewId) {
     views[viewId].classList.remove('hidden');
 }
 
+function setActiveTab(tab) {
+    const uploadTab = document.getElementById('tab-upload');
+    const searchTab = document.getElementById('tab-search');
+    const isSearch = tab === 'search';
+    searchTab?.classList.toggle('active', isSearch);
+    uploadTab?.classList.toggle('active', !isSearch);
+}
+
+function openUploadTab() {
+    setActiveTab('upload');
+    showView(getPagesArray().length > 0 ? 'arrange' : 'upload');
+}
+
+function openSearchTab(initialFilter = '') {
+    setActiveTab('search');
+    showView('search');
+    loadAllSearchablePapers(initialFilter);
+}
+
+function pushTabState(tab, extra = {}) {
+    const nextState = { appNav: true, tab, ...extra };
+    window.history.pushState(nextState, '', window.location.href);
+}
+
+function replaceTabState(tab, extra = {}) {
+    const nextState = { appNav: true, tab, ...extra };
+    window.history.replaceState(nextState, '', window.location.href);
+}
+
 // Initialize modules with shared dependencies
 initUpload(showView);
 fetchCourses();
@@ -31,22 +60,41 @@ document.getElementById('opencv-status').innerText = 'Ready to adjust corners.';
 
 // === Tab Navigation ===
 document.getElementById('tab-upload').addEventListener('click', (e) => {
-    e.target.classList.add('active');
-    document.getElementById('tab-search').classList.remove('active');
-    showView(getPagesArray().length > 0 ? 'arrange' : 'upload');
+    e.preventDefault();
+    openUploadTab();
+    pushTabState('upload');
 });
 
 document.getElementById('tab-search').addEventListener('click', (e) => {
-    e.target.classList.add('active');
-    document.getElementById('tab-upload').classList.remove('active');
-    showView('search');
-    loadAllSearchablePapers();
+    e.preventDefault();
+    openSearchTab();
+    pushTabState('search', { searchLevel: 'subject' });
 });
 
 const initialQuery = new URLSearchParams(window.location.search).get('q');
 if (initialQuery && initialQuery.trim()) {
-    document.getElementById('tab-search').classList.add('active');
-    document.getElementById('tab-upload').classList.remove('active');
-    showView('search');
-    loadAllSearchablePapers(initialQuery.trim());
+    const query = initialQuery.trim();
+    openSearchTab(query);
+    replaceTabState('search', { q: query, searchLevel: 'subject', filter: query });
+} else {
+    openUploadTab();
+    replaceTabState('upload');
 }
+
+window.addEventListener('popstate', (event) => {
+    const state = event.state;
+    if (!state || !state.appNav) return;
+
+    if (state.tab === 'search') {
+        setActiveTab('search');
+        showView('search');
+        if (state.searchLevel) {
+            restoreSearchStateFromHistory(state);
+            return;
+        }
+        openSearchTab(state.q || '');
+        return;
+    }
+
+    openUploadTab();
+});
