@@ -14,7 +14,7 @@ const SUBJECTS_PER_PAGE = 6;
 let currentPage = 1;
 let filteredKeys = [];
 
-export async function loadAllSearchablePapers() {
+export async function loadAllSearchablePapers(initialFilter = '') {
     if (!db) return;
     const grid = document.getElementById('search-results');
     grid.innerHTML = '<div class="loader"></div>';
@@ -69,7 +69,7 @@ export async function loadAllSearchablePapers() {
         
         currentSearchLevel = 'subject';
         currentPage = 1;
-        renderSubjects();
+        renderSubjects(String(initialFilter || '').toLowerCase());
     } catch(e) {
         grid.innerHTML = '<p class="error">Failed to load archives.</p>';
         console.error(e);

@@ -40,3 +40,11 @@ document.getElementById('tab-search').addEventListener('click', (e) => {
     showView('search');
     loadAllSearchablePapers();
 });
+
+const initialQuery = new URLSearchParams(window.location.search).get('q');
+if (initialQuery && initialQuery.trim()) {
+    document.getElementById('tab-search').classList.add('active');
+    document.getElementById('tab-upload').classList.remove('active');
+    showView('search');
+    loadAllSearchablePapers(initialQuery.trim());
+}

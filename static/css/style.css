@@ -163,6 +163,38 @@ main { flex: 1; padding: 20px; background: var(--card-bg); }
     gap: 5px;
 }
 
+.feature-note {
+    background: var(--accent-light);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    margin-top: 20px;
+}
+
+.feature-note h3 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    color: var(--accent-dark);
+}
+
+.feature-note p {
+    margin: 0 0 8px;
+    color: var(--text-color);
+    font-size: 0.86rem;
+}
+
+.feature-note ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.feature-note li {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    margin-bottom: 4px;
+}
+
 .hidden { display: none !important; }
 .text-center { text-align: center; }
 
@@ -647,8 +679,15 @@ textarea { resize: vertical; }
     background: var(--card-bg);
 }
 
+.footer-actions {
+    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .footer-support-btn {
-    margin-left: 10px;
     border: 1px solid var(--border-color);
     background: var(--secondary);
     color: var(--secondary-text);
@@ -657,6 +696,10 @@ textarea { resize: vertical; }
     font-size: 0.75rem;
     font-family: inherit;
     cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-overlay {
@@ -720,6 +763,18 @@ textarea { resize: vertical; }
     display: flex;
     gap: 8px;
     margin-top: 12px;
+}
+
+.seo-hidden-links {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* ---- Mobile-specific tweaks ---- */

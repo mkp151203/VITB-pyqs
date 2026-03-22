@@ -92,6 +92,7 @@
                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">info</span>
                     Capture or upload multiple pages of a question paper to scan &amp; archive.
                 </p>
+                
                 <div class="upload-section upload-actions">
                     <button class="btn btn-primary" id="btn-camera">
                         <span class="material-symbols-outlined btn-icon">photo_camera</span>Take Photo
@@ -101,6 +102,19 @@
                     </button>
                     <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" />
                     <input type="file" id="file-input-multi" accept="image/*" multiple class="hidden" />
+                </div>
+                <div class="feature-note">
+                    <h3>
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-2px;">search</span>
+                        AI Auto-Detect is enabled
+                    </h3>
+                    <p>The app automatically reads page 1 and tries to detect the course and exam type using OCR + AI matching.</p>
+                    <ul>
+                        <li>Step 1: Upload clear images of the paper pages.</li>
+                        <li>Step 2: Reorder and crop pages if needed.</li>
+                        <li>Step 3: Verify detected course/exam and correct it if required.</li>
+                        <li>Step 4: Upload to archive.</li>
+                    </ul>
                 </div>
             </div>
 
@@ -244,12 +258,21 @@
             </div>
 
             <div id="global-message"></div>
+
+            <nav class="seo-hidden-links" aria-label="SEO landing links">
+                <a href="/vit-bhopal-pyq">VIT Bhopal PYQ by Course</a>
+                <a href="/vitb-cse-pyq">VITB CSE PYQ</a>
+            </nav>
         </main>
 
         <footer class="app-footer">
             <span class="material-symbols-outlined" style="font-size:0.9rem;vertical-align:-2px;">favorite</span>
-            Made for VIT Bhopal students &nbsp;·&nbsp; Open source
-            <button id="btn-support" class="footer-support-btn" type="button">Contact Me</button>
+            Made for VIT Bhopal students
+            <div class="footer-actions">
+                <a class="footer-support-btn" href="https://github.com/mkp151203/VITB-pyqs" target="_blank" rel="noopener noreferrer">Github</a>
+                <a class="footer-support-btn" href="http://ffcs-timetable.vercel.app/" target="_blank" rel="noopener noreferrer">FFCS Planner</a>
+                <button id="btn-support" class="footer-support-btn" type="button">Contact Me</button>
+            </div>
         </footer>
     </div>
 
