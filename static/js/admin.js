@@ -20,15 +20,18 @@ import {
 const reportedList = document.getElementById('reported-papers-list');
 const supportList = document.getElementById('support-messages-list');
 const allPapersList = document.getElementById('all-papers-list');
+const adminRequestsList = document.getElementById('admin-requests-list');
 
 const adminSearchInput = document.getElementById('admin-search-input');
 const adminLogoutBtn = document.getElementById('admin-logout-btn');
 const adminTabReported = document.getElementById('admin-tab-reported');
 const adminTabMessages = document.getElementById('admin-tab-messages');
 const adminTabPapers = document.getElementById('admin-tab-papers');
+const adminTabRequests = document.getElementById('admin-tab-requests');
 const adminReportedView = document.getElementById('admin-reported-view');
 const adminMessagesView = document.getElementById('admin-messages-view');
 const adminPapersView = document.getElementById('admin-papers-view');
+const adminRequestsView = document.getElementById('admin-requests-view');
 const adminSearchNav = document.getElementById('admin-search-navigation');
 const adminSearchBarContainer = document.getElementById('admin-search-bar-container');
 const adminSearchBreadcrumb = document.getElementById('admin-search-breadcrumb');
@@ -40,6 +43,7 @@ const adminAddCourseBtn = document.getElementById('admin-add-course-btn');
 let allPapers = [];
 let allReports = [];
 let allSupportMessages = [];
+let allRequests = [];
 let groupedBySubject = {};
 let catalogCourses = [];
 
@@ -245,10 +249,12 @@ function setActiveTab(tab) {
     adminTabReported?.classList.toggle('active', tab === 'reported');
     adminTabMessages?.classList.toggle('active', tab === 'messages');
     adminTabPapers?.classList.toggle('active', tab === 'papers');
+    adminTabRequests?.classList.toggle('active', tab === 'requests');
 
     adminReportedView?.classList.toggle('hidden', tab !== 'reported');
     adminMessagesView?.classList.toggle('hidden', tab !== 'messages');
     adminPapersView?.classList.toggle('hidden', tab !== 'papers');
+    adminRequestsView?.classList.toggle('hidden', tab !== 'requests');
 }
 
 function buildGroupedBySubject() {
@@ -305,9 +311,17 @@ function renderReportedPapers() {
             </div>
             <div class="paper-actions">
                 ${paper?.fileUrl ? `<a class="btn-dl" href="${paper.fileUrl}" target="_blank">Open</a>` : '<span style="color:#999;font-size:0.85rem;">Paper removed</span>'}
+                ${paper?.id ? `<button class="btn-report" data-delete-reported-paper="${paper.id}" type="button">Delete</button>` : ''}
             </div>
         `;
         reportedList.appendChild(card);
+    });
+
+    reportedList.querySelectorAll('[data-delete-reported-paper]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const paperId = button.getAttribute('data-delete-reported-paper');
+            await deletePaperById(paperId, button);
+        });
     });
 }
 
@@ -332,6 +346,61 @@ function renderSupportMessages() {
             `;
             supportList.appendChild(card);
         });
+}
+
+async function deleteRequestById(requestId, triggerButton) {
+    if (!db || !requestId) return;
+    const confirmed = window.confirm('Delete this request?');
+    if (!confirmed) return;
+
+    setButtonLoading(triggerButton, true, 'Deleting...');
+    try {
+        await deleteDoc(doc(db, 'paper_requests', requestId));
+        allRequests = allRequests.filter((item) => item.id !== requestId);
+        renderRequests();
+        showMessage('Request deleted.', 'success');
+    } catch (error) {
+        console.error('Request delete failed', error);
+        showMessage('Failed to delete request.', 'error');
+        setButtonLoading(triggerButton, false);
+    }
+}
+
+function renderRequests() {
+    if (!adminRequestsList) return;
+    adminRequestsList.innerHTML = '';
+
+    if (!allRequests.length) {
+        adminRequestsList.innerHTML = '<p>No requests found.</p>';
+        return;
+    }
+
+    allRequests
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .forEach((item) => {
+            const card = document.createElement('div');
+            card.className = 'paper-card';
+            const status = item.status || 'open';
+            const slot = String(item.slot || '').trim() || 'NA';
+            card.innerHTML = `
+                <div class="paper-details">
+                    <h3>${escapeHtml(item.courseCombined || 'Course not specified')}</h3>
+                    <p style="margin:4px 0 0;color:#777;font-size:0.84rem;">${escapeHtml(item.examName || 'Exam type not specified')} · Slot ${escapeHtml(slot)}</p>
+                    <p style="margin:8px 0 0;color:#888;font-size:0.82rem;">Status: ${escapeHtml(status)} · ${formatDate(item.createdAt)}</p>
+                </div>
+                <div class="paper-actions">
+                    <button class="btn-report" type="button" data-delete-request="${item.id}">Delete Request</button>
+                </div>
+            `;
+            adminRequestsList.appendChild(card);
+        });
+
+    adminRequestsList.querySelectorAll('[data-delete-request]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const requestId = button.getAttribute('data-delete-request');
+            await deleteRequestById(requestId, button);
+        });
+    });
 }
 
 function renderPagination(totalPages, filterQuery) {
@@ -584,25 +653,29 @@ async function loadAllData() {
         reportedList.innerHTML = '<p>Firebase is not configured.</p>';
         supportList.innerHTML = '<p>Firebase is not configured.</p>';
         allPapersList.innerHTML = '<p>Firebase is not configured.</p>';
+        if (adminRequestsList) adminRequestsList.innerHTML = '<p>Firebase is not configured.</p>';
         return;
     }
 
     reportedList.innerHTML = '<div class="loader"></div>';
     supportList.innerHTML = '<div class="loader"></div>';
     allPapersList.innerHTML = '<div class="loader"></div>';
+    if (adminRequestsList) adminRequestsList.innerHTML = '<div class="loader"></div>';
 
     try {
-        const [papersSnapshot, reportsSnapshot, supportSnapshot, catalogSnapshot] = await Promise.all([
+        const [papersSnapshot, reportsSnapshot, supportSnapshot, catalogSnapshot, requestsSnapshot] = await Promise.all([
             getDocs(collection(db, 'question_papers_multi')),
             getDocs(collection(db, 'paper_reports')),
             getDocs(collection(db, 'support_messages')),
-            getDocs(collection(db, 'courses_catalog'))
+            getDocs(collection(db, 'courses_catalog')),
+            getDocs(collection(db, 'paper_requests'))
         ]);
 
         allPapers = papersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
         allReports = reportsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
         allSupportMessages = supportSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
         catalogCourses = catalogSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+        allRequests = requestsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
 
         buildGroupedBySubject();
         currentSearchLevel = 'subject';
@@ -611,11 +684,13 @@ async function loadAllData() {
         renderReportedPapers();
         renderSupportMessages();
         renderSubjects();
+        renderRequests();
     } catch (error) {
         console.error('Admin load failed', error);
         reportedList.innerHTML = '<p>Failed to load reported papers.</p>';
         supportList.innerHTML = '<p>Failed to load support messages.</p>';
         allPapersList.innerHTML = '<p>Failed to load papers.</p>';
+        if (adminRequestsList) adminRequestsList.innerHTML = '<p>Failed to load requests.</p>';
     }
 }
 
@@ -628,6 +703,11 @@ adminTabPapers?.addEventListener('click', () => {
     currentSelectedExam = null;
     currentPage = 1;
     renderSubjects((adminSearchInput?.value || '').toLowerCase());
+});
+
+adminTabRequests?.addEventListener('click', () => {
+    setActiveTab('requests');
+    renderRequests();
 });
 
 adminSearchInput?.addEventListener('input', (e) => {

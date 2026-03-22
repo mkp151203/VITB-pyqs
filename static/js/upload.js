@@ -1,5 +1,5 @@
 // upload.js — File handling, arrange grid, OCR metadata, PDF generation & Firebase upload
-import { db, storage, collection, addDoc, doc, setDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } from './firebase.js';
+import { db, storage, collection, addDoc, doc, setDoc, updateDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } from './firebase.js';
 import { checkSimilarityWithDatabase } from './similarity.js';
 import { openCropView, init as initCrop } from './crop.js';
 
@@ -7,6 +7,8 @@ import { openCropView, init as initCrop } from './crop.js';
 const RATE_LIMIT = 20;
 const RATE_KEY = 'pyq_upload_count';
 const RATE_DATE_KEY = 'pyq_upload_date';
+const SHOW_EXTRACTED_TEXT_PREVIEW = false;
+const PENDING_REQUEST_KEY = 'pyq_pending_request';
 
 function getTodayStr() {
     return new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
@@ -59,6 +61,36 @@ const btnUpload = document.getElementById('btn-upload');
 const btnCamera = document.getElementById('btn-camera');
 const btnAddGallery = document.getElementById('btn-add-gallery');
 const btnAddCamera = document.getElementById('btn-add-camera');
+const btnCancelMetadata = document.getElementById('btn-cancel-metadata');
+const btnCancelRequestFlow = document.getElementById('btn-cancel-request-flow');
+const extractedTextGroup = document.getElementById('extracted-text-group');
+const pendingRequestNotice = document.getElementById('pending-request-notice');
+const pendingRequestText = document.getElementById('pending-request-text');
+
+function applyExtractedTextVisibility() {
+    if (!extractedTextGroup) return;
+    extractedTextGroup.classList.toggle('hidden', !SHOW_EXTRACTED_TEXT_PREVIEW);
+}
+
+applyExtractedTextVisibility();
+
+function renderPendingRequestNotice(prefill) {
+    if (!pendingRequestNotice || !pendingRequestText) return;
+    if (prefill?.id) {
+        const examText = prefill.examName ? ` · ${prefill.examName}` : '';
+        const slotText = prefill.slot ? ` · Slot ${prefill.slot}` : '';
+        pendingRequestText.innerText = `Uploading for request: ${prefill.courseCombined || 'Requested paper'}${examText}${slotText}`;
+        pendingRequestNotice.classList.remove('hidden');
+        return;
+    }
+    pendingRequestText.innerText = 'Uploading for request';
+    pendingRequestNotice.classList.add('hidden');
+}
+
+renderPendingRequestNotice(getPendingRequestPrefill());
+document.getElementById('tab-upload')?.addEventListener('click', () => {
+    renderPendingRequestNotice(getPendingRequestPrefill());
+});
 
 // View management (set from app.js)
 let _showView = null;
@@ -85,6 +117,29 @@ function showMsg(msg, type) {
     el.innerText = msg;
     el.className = type;
     setTimeout(() => el.innerText='', 4000);
+}
+
+function sanitizeExtractedText(rawText) {
+    return String(rawText || '')
+        .replace(/[^A-Za-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getPendingRequestPrefill() {
+    try {
+        const raw = localStorage.getItem(PENDING_REQUEST_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return {
+            id: parsed?.id || '',
+            courseCombined: String(parsed?.courseCombined || '').trim(),
+            examName: String(parsed?.examName || '').trim(),
+            slot: String(parsed?.slot || '').trim().toUpperCase()
+        };
+    } catch {
+        return null;
+    }
 }
 
 function setButtonLoading(button, loading, loadingText = 'Please wait...') {
@@ -270,27 +325,41 @@ btnNextMetadata.addEventListener('click', async () => {
     
     try {
         const { data: { text } } = await Tesseract.recognize(imageToScan, 'eng');
-        page1.text = text;
+        const cleanedText = sanitizeExtractedText(text);
+        page1.text = cleanedText;
         
         const parseRes = await fetch('/api/parse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
+            body: JSON.stringify({ text: cleanedText })
         });
         
         const structuredData = await parseRes.json();
+
+        const pendingRequest = getPendingRequestPrefill();
+        renderPendingRequestNotice(pendingRequest);
+        const selectedCourseFromDetection = pendingRequest?.courseCombined || structuredData.course_combined || '';
+        const selectedExamFromDetection = pendingRequest?.examName || structuredData.exam_name || '';
+        const selectedSlotFromRequest = pendingRequest?.slot || '';
         
-        document.getElementById('course-title').value = structuredData.course_combined || '';
+        document.getElementById('course-title').value = selectedCourseFromDetection;
         if (document.getElementById('course-select-text')) {
-            document.getElementById('course-select-text').innerText = structuredData.course_combined || 'Select a course...';
+            document.getElementById('course-select-text').innerText = selectedCourseFromDetection || 'Select a course...';
         }
-        document.getElementById('exam-name').value = structuredData.exam_name || '';
-        document.getElementById('extracted-text-pg1').value = text;
+        document.getElementById('exam-name').value = selectedExamFromDetection;
+        if (selectedSlotFromRequest && selectedSlotFromRequest !== 'NA' && document.getElementById('slot-info')) {
+            document.getElementById('slot-info').value = selectedSlotFromRequest;
+        }
+        document.getElementById('extracted-text-pg1').value = cleanedText;
         
         const wEl = document.getElementById('ocr-warning');
-        if (structuredData.course_combined) {
+        if (selectedCourseFromDetection) {
             wEl.classList.add('hidden');
-            checkSimilarityWithDatabase(structuredData.course_combined, text);
+            checkSimilarityWithDatabase(selectedCourseFromDetection, cleanedText);
+            if (pendingRequest?.courseCombined) {
+                wEl.innerText = 'Prefilled from selected request. You can still change course/exam before upload.';
+                wEl.classList.remove('hidden');
+            }
         } else {
             wEl.innerText = "course not detected please select a course. Please do not upload any image other than question paper";
             wEl.classList.remove('hidden');
@@ -314,6 +383,30 @@ document.getElementById('course-title').addEventListener('change', (e) => {
     if (courseComb && text) {
         checkSimilarityWithDatabase(courseComb, text);
     }
+});
+
+btnCancelMetadata?.addEventListener('click', () => {
+    const courseDropdown = document.getElementById('course-select-dropdown');
+    courseDropdown?.classList.add('hidden');
+
+    if (pagesArray.length > 0) {
+        _showView('arrange');
+    } else {
+        _showView('upload');
+    }
+});
+
+btnCancelRequestFlow?.addEventListener('click', () => {
+    localStorage.removeItem(PENDING_REQUEST_KEY);
+    renderPendingRequestNotice(null);
+
+    const warningEl = document.getElementById('ocr-warning');
+    if (warningEl && warningEl.innerText.includes('Prefilled from selected request')) {
+        warningEl.classList.add('hidden');
+        warningEl.innerText = '';
+    }
+
+    showMsg('Request fulfillment cancelled. Upload will continue as normal.', 'success');
 });
 
 // === Process & Upload File ===
@@ -356,6 +449,8 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         return;
     }
 
+    const pendingRequest = getPendingRequestPrefill();
+
     setButtonLoading(uploadBtn, true, uploadBtn?.innerHTML || 'Process All Pages &amp; Upload');
     
     _showView('processing');
@@ -366,6 +461,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
     try {
         const courseCombined = courseCombinedVal || 'UNKNOWN';
         const examName = document.getElementById('exam-name').value || 'UNKNOWN';
+        const slotInfo = ((document.getElementById('slot-info')?.value || '').trim() || 'NA').toUpperCase();
         
         let courseCode = courseCodeVal || "UNKNOWN";
         if (!courseCodeVal) {
@@ -457,10 +553,11 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         pStatus.innerText = `Finalizing Database...`;
         pBar.style.width = '95%';
         
-        await addDoc(collection(db, "question_papers_multi"), {
+        const uploadedPaperRef = await addDoc(collection(db, "question_papers_multi"), {
             courseTitle: courseCombined,
             courseCode: courseCode,
             examName: examName,
+            slot: slotInfo,
             fullExtractedText: fullExtractedText,
             pageCount: total,
             fileType: fileType,
@@ -481,6 +578,23 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
                 console.warn('Unable to sync custom course to courses_catalog:', catalogError);
             }
         }
+
+        if (pendingRequest?.id) {
+            try {
+                await updateDoc(doc(db, 'paper_requests', pendingRequest.id), {
+                    status: 'fulfilled',
+                    fulfilledAt: new Date().toISOString(),
+                    fulfilledPaperId: uploadedPaperRef.id,
+                    fulfilledCourseCombined: courseCombined,
+                    fulfilledExamName: examName
+                });
+            } catch (requestUpdateError) {
+                console.warn('Uploaded paper but failed to mark request fulfilled:', requestUpdateError);
+            }
+        }
+
+        localStorage.removeItem(PENDING_REQUEST_KEY);
+        renderPendingRequestNotice(null);
         
         // Increment the daily upload counter
         const uploadsToday = incrementUploadCount();

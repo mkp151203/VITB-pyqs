@@ -51,6 +51,24 @@ def load_courses_dict():
 
 courses_dict = load_courses_dict()
 
+HEADER_STOP_REGEX = re.compile(
+    r'\b(?:questions?|answer(?:\s+all)?|marks?|question\s*description|part\s*[a-z]|section\s*[a-z])\b',
+    re.IGNORECASE
+)
+HEADER_MAX_CHARS = 900
+
+
+def extract_header_text(text):
+    cleaned = re.sub(r'\s+', ' ', (text or '')).strip()
+    if not cleaned:
+        return ''
+
+    marker = HEADER_STOP_REGEX.search(cleaned)
+    if marker:
+        cleaned = cleaned[:marker.start()].strip()
+
+    return cleaned[:HEADER_MAX_CHARS].strip()
+
 
 def get_site_url():
     return os.environ.get('SITE_URL', 'https://vitbhopal-pyq.vercel.app').rstrip('/')
@@ -184,6 +202,10 @@ def get_course_details_from_csv(extracted_code, extracted_title, full_text):
 @app.route('/')
 def index():
     return send_from_directory('../', 'index.html')
+
+@app.route('/bulk-uploader')
+def bulk_uploader_page():
+    return send_from_directory('../', 'bulk_uploader.html')
 
 @app.route('/robots.txt')
 def robots_txt():
@@ -374,25 +396,27 @@ def parse_text():
          return jsonify({"error": "No text provided"}), 400
          
     text_clean = data['text'].replace('\n', ' ')
+    header_text = extract_header_text(text_clean)
+    detection_text = header_text or text_clean[:HEADER_MAX_CHARS]
     
     # 1. Exam Name
     exam_name = "Not Found"
-    if re.search(r'MID\s*TERM|CAT\s*\d?', text_clean, re.IGNORECASE):
+    if re.search(r'MID\s*TERM|CAT\s*\d?', detection_text, re.IGNORECASE):
         exam_name = "Midterm"
-    elif re.search(r'TERM\s*END|END\s*TERM|FAT', text_clean, re.IGNORECASE):
+    elif re.search(r'TERM\s*END|END\s*TERM|FAT', detection_text, re.IGNORECASE):
         exam_name = "Term End"
         
     # 2. Course Code Extraction
     course_code = "Not Found"
-    fallback = re.search(r'Course\s*Cod[^a-zA-Z0-9]*\s*([a-zA-Z0-9OIl\+]{5,10})', text_clean, re.IGNORECASE)
+    fallback = re.search(r'Course\s*Cod[^a-zA-Z0-9]*\s*([a-zA-Z0-9OIl\+]{5,10})', detection_text, re.IGNORECASE)
     if fallback:
          course_code = fallback.group(1).upper()
     else:
-         code_match = re.search(r'\b([A-Z]{3,4}\s*[0-9OIl\+]{3,4})\b', text_clean)
+         code_match = re.search(r'\b([A-Z]{3,4}\s*[0-9OIl\+]{3,4})\b', detection_text)
          if code_match:
              course_code = code_match.group(1).upper()
          else:
-             fallback_before = re.search(r'\b([a-zA-Z0-9]{5,10})\s+(?:Programme|Course\s*Cod)', text_clean, re.IGNORECASE)
+             fallback_before = re.search(r'\b([a-zA-Z0-9]{5,10})\s+(?:Programme|Course\s*Cod)', detection_text, re.IGNORECASE)
              if fallback_before:
                  course_code = fallback_before.group(1).upper()
 
@@ -404,15 +428,15 @@ def parse_text():
 
     # 3. Course Title Regex Extraction
     course_title = "Not Found"
-    title_match = re.search(r'(?:Title|Name)\s+(.*?)\s+(?:Course|Cod[ec]|Dute|Date|Session|Slot|Max\.|CIA|Time|Programme|Answer|Hrs)', text_clean, re.IGNORECASE)
+    title_match = re.search(r'(?:Title|Name)\s+(.*?)\s+(?:Course|Cod[ec]|Dute|Date|Session|Slot|Max\.|CIA|Time|Programme|Answer|Hrs)', detection_text, re.IGNORECASE)
     if title_match:
         course_title = title_match.group(1).strip()
     else:
-        title_match2 = re.search(r'Cod[^a-zA-Z0-9]*.*?(?:Title|Name)\s+(.*?)\s+(?:Dute|Date|Session|Slot|Max\.|CIA|Time|Answer|Hrs)', text_clean, re.IGNORECASE)
+        title_match2 = re.search(r'Cod[^a-zA-Z0-9]*.*?(?:Title|Name)\s+(.*?)\s+(?:Dute|Date|Session|Slot|Max\.|CIA|Time|Answer|Hrs)', detection_text, re.IGNORECASE)
         if title_match2:
              course_title = title_match2.group(1).strip()
              
-    course_code, course_title = get_course_details_from_csv(course_code, course_title, text_clean)
+    course_code, course_title = get_course_details_from_csv(course_code, course_title, detection_text)
              
     if course_code == "Not Found": course_code = ""
     if course_title == "Not Found": course_title = ""
@@ -464,6 +488,29 @@ def proxy_pdf():
         r.raise_for_status()
         headers = {
             'Content-Type': 'application/pdf',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'public, max-age=86400',
+        }
+        return Response(
+            stream_with_context(r.iter_content(chunk_size=32768)),
+            status=r.status_code,
+            headers=headers
+        )
+    except Exception as e:
+        return str(e), 502
+
+
+@app.route('/api/proxy-file')
+def proxy_file():
+    url = request.args.get('url', '')
+    if not url or 'firebasestorage.googleapis.com' not in url:
+        return 'Invalid or missing URL', 400
+
+    try:
+        r = http_req.get(url, stream=True, timeout=30)
+        r.raise_for_status()
+        headers = {
+            'Content-Type': r.headers.get('Content-Type', 'application/octet-stream'),
             'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'public, max-age=86400',
         }

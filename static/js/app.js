@@ -4,6 +4,7 @@ import { fetchCourses } from './courses.js';
 import { init as initUpload, getPagesArray } from './upload.js';
 import { loadAllSearchablePapers } from './search.js';
 import { initFeedback } from './feedback.js';
+import { initRequests } from './requests.js';
 
 // === View State Machine ===
 const views = {
@@ -24,6 +25,7 @@ function showView(viewId) {
 initUpload(showView);
 fetchCourses();
 initFeedback();
+initRequests();
 
 document.getElementById('opencv-status').innerText = 'Ready to adjust corners.';
 

@@ -1,8 +1,20 @@
 // similarity.js — Duplicate detection using TF-IDF Cosine + Jaccard similarity
 import { db, collection, getDocs, query, where } from './firebase.js';
 
+function normalizeForSimilarity(str) {
+    return String(str || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+}
+
 function getTokens(str) {
-    return str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    const normalized = normalizeForSimilarity(str);
+    if (!normalized) return [];
+    if (normalized.length <= 3) return [normalized];
+
+    const grams = [];
+    for (let i = 0; i <= normalized.length - 3; i++) {
+        grams.push(normalized.slice(i, i + 3));
+    }
+    return grams;
 }
 
 function calculateJaccard(str1, str2) {
@@ -80,7 +92,7 @@ export async function checkSimilarityWithDatabase(courseCombined, extractedText)
             }
         });
         
-        if (maxSim > 45 && bestMatch) {
+        if (maxSim > 50 && bestMatch) {
             const fileUrl = bestMatch.fileUrl || bestMatch.zipUrl || '';
             const explicitType = (bestMatch.fileType || '').toLowerCase();
             const isPdf = explicitType ? explicitType === 'pdf' : fileUrl.toLowerCase().includes('.pdf');

@@ -38,6 +38,7 @@ let edgeDragStart = null; // { c0: {x,y}, c1: {x,y}, px, py }
 
 let pendingCroppedDataUrl = null;
 let pendingBlob = null;
+const CROP_IMAGE_VIEW_SCALE = 0.86;
 
 // Dependencies injected by upload.js
 let _pagesArray = null;
@@ -112,8 +113,8 @@ document.getElementById('btn-rotate-right').addEventListener('click', () => rota
 function resizeCanvasAndRender() {
     const container = document.getElementById('crop-container');
     const padding = 20;
-    const maxW = Math.max(1, container.clientWidth - padding * 2);
-    const maxH = Math.max(1, container.clientHeight - padding * 2);
+    const maxW = Math.max(1, (container.clientWidth - padding * 2) * CROP_IMAGE_VIEW_SCALE);
+    const maxH = Math.max(1, (container.clientHeight - padding * 2) * CROP_IMAGE_VIEW_SCALE);
     const imgRatio = currentImg.width / currentImg.height;
     const contRatio = maxW / maxH;
     let renderW, renderH;
@@ -132,7 +133,12 @@ function resizeCanvasAndRender() {
 
 function getDefaultCorners() {
     const w = currentImg.width, h = currentImg.height;
-    return [{x:0,y:0},{x:w,y:0},{x:w,y:h},{x:0,y:h}];
+    return [
+        { x: 0, y: 0 },
+        { x: w, y: 0 },
+        { x: w, y: h },
+        { x: 0, y: h }
+    ];
 }
 
 // ---- Render overlay ----

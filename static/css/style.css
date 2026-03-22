@@ -360,6 +360,7 @@ textarea { resize: vertical; }
 .crop-header > div { display: flex; gap: 8px; }
 
 .crop-container {
+
     flex: 1;
     position: relative;
     overflow: hidden;
@@ -771,6 +772,19 @@ textarea { resize: vertical; }
     margin-top: 12px;
 }
 
+.requests-modal-card {
+    max-height: min(84vh, 760px);
+    display: flex;
+    flex-direction: column;
+}
+
+.requests-list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 8px;
+}
+
 .seo-hidden-links {
     position: absolute;
     width: 1px;
@@ -790,7 +804,7 @@ textarea { resize: vertical; }
     .brand-text h1 { font-size: 1.15rem; }
     .pages-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .btn { padding: 12px 16px; font-size: 0.9rem; }
-    .crop-header { padding: 10px 12px; }
+    .crop-header { padding: 15px 15px; }
     .crop-header h3 { font-size: 0.9rem; }
 }
 

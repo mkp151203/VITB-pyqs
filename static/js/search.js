@@ -8,11 +8,90 @@ let groupedBySubject = {};
 let currentSearchLevel = 'subject'; 
 let currentSelectedSubject = null;
 let currentSelectedExam = null;
+let currentSelectedSubjectCode = null;
 
 // Pagination state
 const SUBJECTS_PER_PAGE = 6;
 let currentPage = 1;
 let filteredKeys = [];
+
+function setButtonLoading(button, loading, loadingText = 'Please wait...') {
+    if (!button) return;
+    if (loading) {
+        if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+        button.innerHTML = loadingText;
+        button.classList.add('is-loading');
+        button.disabled = true;
+    } else {
+        if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+    }
+}
+
+function sanitizePart(value = '') {
+    return String(value).replace(/[^a-zA-Z0-9-_ ]/g, '').trim().replace(/\s+/g, '_') || 'paper';
+}
+
+function getNormalizedSlot(paper) {
+    const value = String(paper?.slot || paper?.slotInfo || '').trim();
+    return value || 'NA';
+}
+
+function getPaperExt(paper) {
+    const explicitType = (paper.fileType || '').toLowerCase();
+    if (explicitType === 'image') return 'webp';
+    if (explicitType === 'pdf') return 'pdf';
+    const fileUrl = String(paper.fileUrl || '').toLowerCase();
+    if (fileUrl.includes('.pdf')) return 'pdf';
+    if (fileUrl.includes('.png')) return 'png';
+    if (fileUrl.includes('.jpg') || fileUrl.includes('.jpeg')) return 'jpg';
+    if (fileUrl.includes('.webp')) return 'webp';
+    return 'bin';
+}
+
+function buildPaperFileName(paper, index) {
+    const ext = getPaperExt(paper);
+    const exam = sanitizePart(paper.examName || 'Exam');
+    const date = paper.createdAt ? new Date(paper.createdAt).toISOString().slice(0, 10) : 'unknown-date';
+    return `${String(index + 1).padStart(2, '0')}_${exam}_${date}.${ext}`;
+}
+
+async function fetchPaperBlob(fileUrl) {
+    if (!fileUrl) throw new Error('Missing file URL');
+    const urlToFetch = fileUrl.includes('firebasestorage.googleapis.com')
+        ? `/api/proxy-file?url=${encodeURIComponent(fileUrl)}`
+        : fileUrl;
+    const response = await fetch(urlToFetch);
+    if (!response.ok) throw new Error(`Failed to fetch file (${response.status})`);
+    return response.blob();
+}
+
+async function downloadPapersZip({ zipName, folders }) {
+    if (!window.JSZip) throw new Error('JSZip not loaded');
+    const zip = new window.JSZip();
+
+    for (const folderItem of folders) {
+        const folder = zip.folder(folderItem.name);
+        const papers = folderItem.papers || [];
+        for (let i = 0; i < papers.length; i++) {
+            const paper = papers[i];
+            if (!paper.fileUrl) continue;
+            const blob = await fetchPaperBlob(paper.fileUrl);
+            folder.file(buildPaperFileName(paper, i), blob);
+        }
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${sanitizePart(zipName)}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+}
 
 export async function loadAllSearchablePapers(initialFilter = '') {
     if (!db) return;
@@ -113,13 +192,36 @@ function renderSubjects(filterQuery = '') {
                     <h3>${data.courseTitle}</h3>
                     <p style="margin: 4px 0 0; color:#888; font-size: 0.82rem;">${total} paper${total !== 1 ? 's' : ''} available</p>
                 </div>
-                <span class="material-symbols-outlined" style="font-size:1.4rem; color:#ccc; flex-shrink:0;">chevron_right</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn btn-secondary btn-sm" type="button" data-zip-course="${key}">Download ZIP</button>
+                    <span class="material-symbols-outlined" style="font-size:1.4rem; color:#ccc; flex-shrink:0;">chevron_right</span>
+                </div>
             </div>
         `;
-        div.addEventListener('click', () => {
+        div.addEventListener('click', (event) => {
+            if (event.target.closest('[data-zip-course]')) return;
             currentSearchLevel = 'exam';
             currentSelectedSubject = data;
+            currentSelectedSubjectCode = key;
             renderExamTypes();
+        });
+
+        const zipCourseBtn = div.querySelector('[data-zip-course]');
+        zipCourseBtn?.addEventListener('click', async () => {
+            setButtonLoading(zipCourseBtn, true, 'Preparing ZIP...');
+            try {
+                await downloadPapersZip({
+                    zipName: `${key}_${data.courseTitle}_all`,
+                    folders: [
+                        { name: 'Midterm', papers: data.midterm },
+                        { name: 'Term End', papers: data.termEnd }
+                    ]
+                });
+            } catch (error) {
+                console.error('Course ZIP failed:', error);
+            } finally {
+                setButtonLoading(zipCourseBtn, false);
+            }
         });
         grid.appendChild(div);
     });
@@ -177,22 +279,68 @@ function renderExamTypes() {
     const midDiv = document.createElement('div');
     midDiv.className = 'paper-card';
     midDiv.style.cursor = 'pointer';
-    midDiv.innerHTML = `<h3>Mid-term Exam</h3><p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.midterm.length} paper${currentSelectedSubject.midterm.length !== 1 ? 's' : ''}</p>`;
+    midDiv.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div>
+                <h3>Mid-term Exam</h3>
+                <p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.midterm.length} paper${currentSelectedSubject.midterm.length !== 1 ? 's' : ''}</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" type="button" data-zip-exam="midterm">Download ZIP</button>
+        </div>
+    `;
     midDiv.addEventListener('click', () => {
         currentSearchLevel = 'paper';
         currentSelectedExam = 'Midterm';
         renderPapersList(currentSelectedSubject.midterm);
+    });
+    const midZipBtn = midDiv.querySelector('[data-zip-exam="midterm"]');
+    midZipBtn?.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        setButtonLoading(midZipBtn, true, 'Preparing ZIP...');
+        try {
+            await downloadPapersZip({
+                zipName: `${currentSelectedSubjectCode || 'course'}_${currentSelectedSubject.courseTitle}_midterm`,
+                folders: [{ name: 'Midterm', papers: currentSelectedSubject.midterm }]
+            });
+        } catch (error) {
+            console.error('Midterm ZIP failed:', error);
+        } finally {
+            setButtonLoading(midZipBtn, false);
+        }
     });
     grid.appendChild(midDiv);
     
     const termDiv = document.createElement('div');
     termDiv.className = 'paper-card';
     termDiv.style.cursor = 'pointer';
-    termDiv.innerHTML = `<h3>Term-End Exam</h3><p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.termEnd.length} paper${currentSelectedSubject.termEnd.length !== 1 ? 's' : ''}</p>`;
+    termDiv.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div>
+                <h3>Term-End Exam</h3>
+                <p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.termEnd.length} paper${currentSelectedSubject.termEnd.length !== 1 ? 's' : ''}</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" type="button" data-zip-exam="termend">Download ZIP</button>
+        </div>
+    `;
     termDiv.addEventListener('click', () => {
         currentSearchLevel = 'paper';
         currentSelectedExam = 'Term End';
         renderPapersList(currentSelectedSubject.termEnd);
+    });
+    const termZipBtn = termDiv.querySelector('[data-zip-exam="termend"]');
+    termZipBtn?.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        setButtonLoading(termZipBtn, true, 'Preparing ZIP...');
+        try {
+            await downloadPapersZip({
+                zipName: `${currentSelectedSubjectCode || 'course'}_${currentSelectedSubject.courseTitle}_termend`,
+                folders: [{ name: 'Term End', papers: currentSelectedSubject.termEnd }]
+            });
+        } catch (error) {
+            console.error('Term-End ZIP failed:', error);
+        } finally {
+            setButtonLoading(termZipBtn, false);
+        }
     });
     grid.appendChild(termDiv);
 }
@@ -204,8 +352,41 @@ function renderPapersList(papers) {
     document.getElementById('search-breadcrumb').innerText = `Subjects / ${currentSelectedSubject.courseTitle} / ${currentSelectedExam}`;
     
     if(!papers.length) { grid.innerHTML = '<p>No papers found in this category.</p>'; return; }
-    
-    papers.forEach(p => {
+
+    const slotValues = [...new Set(papers.map(getNormalizedSlot))].sort((a, b) => a.localeCompare(b));
+    const slotFilterWrap = document.createElement('div');
+    slotFilterWrap.className = 'form-group';
+    slotFilterWrap.style.marginBottom = '10px';
+    slotFilterWrap.innerHTML = `
+        <label for="slot-filter-select">
+            <span class="material-symbols-outlined label-icon">tune</span>
+            Filter by Slot
+        </label>
+        <select id="slot-filter-select">
+            <option value="ALL">All Slots</option>
+            ${slotValues.map((slot) => `<option value="${slot}">${slot}</option>`).join('')}
+        </select>
+    `;
+    grid.appendChild(slotFilterWrap);
+
+    const papersContainer = document.createElement('div');
+    papersContainer.className = 'results-grid';
+    grid.appendChild(papersContainer);
+
+    const renderFilteredPapers = () => {
+        const selectedSlot = document.getElementById('slot-filter-select')?.value || 'ALL';
+        papersContainer.innerHTML = '';
+
+        const filteredPapers = selectedSlot === 'ALL'
+            ? papers
+            : papers.filter((paper) => getNormalizedSlot(paper) === selectedSlot);
+
+        if (!filteredPapers.length) {
+            papersContainer.innerHTML = '<p>No papers found for selected slot.</p>';
+            return;
+        }
+
+        filteredPapers.forEach(p => {
         const div = document.createElement('div');
         div.className = 'paper-card';
         
@@ -254,6 +435,7 @@ function renderPapersList(papers) {
                     </span>
                     <span style="font-size:0.8rem; color:#999;">${new Date(p.createdAt).toLocaleDateString()}</span>
                 </div>
+                <p style="margin:8px 0 0; color:#777; font-size:0.82rem;">Slot: <strong>${getNormalizedSlot(p)}</strong></p>
                 ${previewHtml}
             </div>
             <div class="paper-actions">
@@ -279,7 +461,11 @@ function renderPapersList(papers) {
         if (isPdf && fileUrl) {
             renderPdfPreview(fileUrl, cardId);
         }
-    });
+        });
+    };
+
+    document.getElementById('slot-filter-select')?.addEventListener('change', renderFilteredPapers);
+    renderFilteredPapers();
 }
 
 // Render the first page of a PDF to a canvas using PDF.js
@@ -329,6 +515,7 @@ document.getElementById('btn-search-back')?.addEventListener('click', () => {
         renderExamTypes();
     } else if (currentSearchLevel === 'exam') {
         currentSearchLevel = 'subject';
+        currentSelectedSubjectCode = null;
         renderSubjects(document.getElementById('search-input').value.toLowerCase());
     }
 });

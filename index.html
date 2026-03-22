@@ -46,6 +46,7 @@
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- PDF.js for mobile-compatible PDF preview -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
@@ -123,6 +124,28 @@
                         <li>Step 3: Verify detected course/exam and correct it if required.</li>
                         <li>Step 4: Upload to archive.</li>
                     </ul>
+                </div>
+
+                <div id="pending-request-notice" class="hidden" style="margin-top:10px;">
+                    <button id="btn-cancel-request-flow" type="button" class="btn btn-secondary btn-sm" style="width:auto;display:inline-flex;gap:8px;align-items:center;">
+                        <span id="pending-request-text">Uploading for request</span>
+                        <span style="font-weight:700;line-height:1;">×</span>
+                    </button>
+                </div>
+
+                <div class="actions-row" style="margin-top: 10px;">
+                    <button id="btn-open-request" class="btn btn-secondary btn-flex-1" type="button">
+                        <span class="material-symbols-outlined btn-icon">campaign</span>
+                        Request Paper
+                    </button>
+                    <button id="btn-open-help" class="btn btn-primary btn-flex-1" type="button">
+                        <span class="material-symbols-outlined btn-icon">volunteer_activism</span>
+                        Help Others
+                    </button>
+                    <button id="btn-open-fulfilled" class="btn btn-secondary btn-flex-1" type="button">
+                        <span class="material-symbols-outlined btn-icon">task_alt</span>
+                        Fulfilled Requests
+                    </button>
                 </div>
             </div>
 
@@ -240,16 +263,30 @@
                         </select>
                     </div>
 
-                    <div class="form-group hidden">
+                    <div class="form-group">
+                        <label for="slot-info">
+                            <span class="material-symbols-outlined label-icon">schedule</span>
+                            Slot (Optional)
+                        </label>
+                        <input type="text" id="slot-info" name="slot_info" placeholder="e.g. A1+TA1">
+                    </div>
+
+                    <div class="form-group hidden" id="extracted-text-group">
                         <textarea id="extracted-text-pg1" name="extracted_text_pg1" rows="3" readonly></textarea>
                     </div>
 
                     <div id="duplicate-warning" class="hidden"></div>
 
-                    <button type="submit" id="btn-upload-final" class="btn btn-primary">
-                        <span class="material-symbols-outlined btn-icon">cloud_upload</span>
-                        Process All Pages &amp; Upload
-                    </button>
+                    <div class="actions-row">
+                        <button type="button" id="btn-cancel-metadata" class="btn btn-secondary btn-flex-1">
+                            <span class="material-symbols-outlined btn-icon">close</span>
+                            Cancel
+                        </button>
+                        <button type="submit" id="btn-upload-final" class="btn btn-primary btn-flex-2">
+                            <span class="material-symbols-outlined btn-icon">cloud_upload</span>
+                            Process All Pages &amp; Upload
+                        </button>
+                    </div>
                 </form>
             </div>
 
@@ -329,6 +366,56 @@
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-close-modal="support" type="button">Cancel</button>
                 <button id="btn-send-support" class="btn btn-primary" type="button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="request-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Request a Paper</h3>
+                <button class="modal-close" data-close-modal="request" type="button">×</button>
+            </div>
+            <p class="modal-desc">Post a request so others can upload this paper. Maximum 30 open requests across the website.</p>
+            <input id="request-course" type="text" list="request-course-options" placeholder="Course (e.g. CSE2001 - Data Structures)">
+            <datalist id="request-course-options"></datalist>
+            <select id="request-exam" style="margin-top:8px;">
+                <option value="">Select Exam Type</option>
+                <option value="Midterm">Mid-term Exam</option>
+                <option value="Term End">Term-End Exam</option>
+            </select>
+            <input id="request-slot" type="text" maxlength="30" placeholder="Slot (Optional, e.g. A1+TA1)" style="margin-top:8px;">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-close-modal="request" type="button">Cancel</button>
+                <button id="btn-send-request" class="btn btn-primary" type="button">Post Request</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="help-modal" class="modal-overlay hidden">
+        <div class="modal-card requests-modal-card" style="max-width:560px;">
+            <div class="modal-header">
+                <h3>Help Others</h3>
+                <button class="modal-close" data-close-modal="help" type="button">×</button>
+            </div>
+            <p class="modal-desc">Open requests from students. Choose one and upload the paper.</p>
+            <div id="help-requests-list" class="results-grid requests-list-scroll"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-close-modal="help" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fulfilled-modal" class="modal-overlay hidden">
+        <div class="modal-card requests-modal-card" style="max-width:560px;">
+            <div class="modal-header">
+                <h3>Fulfilled Requests</h3>
+                <button class="modal-close" data-close-modal="fulfilled" type="button">×</button>
+            </div>
+            <p class="modal-desc">Latest fulfilled requests from the community (max 30).</p>
+            <div id="fulfilled-requests-list" class="results-grid requests-list-scroll"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-close-modal="fulfilled" type="button">Close</button>
             </div>
         </div>
     </div>
