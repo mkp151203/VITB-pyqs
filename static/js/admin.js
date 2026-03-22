@@ -9,7 +9,6 @@ import {
     where,
     doc,
     deleteDoc,
-    writeBatch,
     setDoc,
     serverTimestamp,
     ref,
@@ -24,7 +23,6 @@ const allPapersList = document.getElementById('all-papers-list');
 
 const adminSearchInput = document.getElementById('admin-search-input');
 const adminLogoutBtn = document.getElementById('admin-logout-btn');
-const adminSyncCoursesBtn = document.getElementById('admin-sync-courses-btn');
 const adminTabReported = document.getElementById('admin-tab-reported');
 const adminTabMessages = document.getElementById('admin-tab-messages');
 const adminTabPapers = document.getElementById('admin-tab-papers');
@@ -35,11 +33,15 @@ const adminSearchNav = document.getElementById('admin-search-navigation');
 const adminSearchBarContainer = document.getElementById('admin-search-bar-container');
 const adminSearchBreadcrumb = document.getElementById('admin-search-breadcrumb');
 const adminSearchBackBtn = document.getElementById('admin-btn-search-back');
+const adminNewCourseCodeInput = document.getElementById('admin-new-course-code');
+const adminNewCourseTitleInput = document.getElementById('admin-new-course-title');
+const adminAddCourseBtn = document.getElementById('admin-add-course-btn');
 
 let allPapers = [];
 let allReports = [];
 let allSupportMessages = [];
 let groupedBySubject = {};
+let catalogCourses = [];
 
 let currentSearchLevel = 'subject';
 let currentSelectedSubject = null;
@@ -76,6 +78,20 @@ function formatDate(value) {
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
 }
 
+function setButtonLoading(button, loading, loadingText = 'Please wait...') {
+    if (!button) return;
+    if (loading) {
+        if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+        button.innerHTML = loadingText;
+        button.classList.add('is-loading');
+        button.disabled = true;
+    } else {
+        if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+    }
+}
+
 function normalizeCourseEntry(raw) {
     const value = String(raw || '').trim().replace(/\s+/g, ' ');
     if (!value) return null;
@@ -100,62 +116,122 @@ function normalizeCourseEntry(raw) {
     };
 }
 
-async function syncCoursesCatalogFromApi() {
+function toCourseDocId(code = '') {
+    return String(code).replace(/\//g, '-').replace(/\s+/g, '').toUpperCase();
+}
+
+function getMergedSubjects() {
+    const mergedMap = new Map();
+
+    Object.keys(groupedBySubject).forEach((key) => {
+        const data = groupedBySubject[key];
+        mergedMap.set(key, {
+            courseCode: key,
+            courseTitle: data.courseTitle || key,
+            courseCombined: `${key} - ${data.courseTitle || key}`,
+            midterm: data.midterm || [],
+            termEnd: data.termEnd || [],
+            inCatalog: catalogCourses.some((c) => c.courseCode === key || c.id === toCourseDocId(key))
+        });
+    });
+
+    catalogCourses.forEach((course) => {
+        const code = (course.courseCode || course.id || '').toString().trim().toUpperCase();
+        if (!code) return;
+        const existing = mergedMap.get(code);
+        if (existing) {
+            existing.inCatalog = true;
+            if (!existing.courseTitle || existing.courseTitle === code) {
+                existing.courseTitle = course.courseTitle || existing.courseTitle;
+            }
+            if (course.courseCombined) existing.courseCombined = course.courseCombined;
+            return;
+        }
+
+        mergedMap.set(code, {
+            courseCode: code,
+            courseTitle: course.courseTitle || code,
+            courseCombined: course.courseCombined || `${code} - ${course.courseTitle || code}`,
+            midterm: [],
+            termEnd: [],
+            inCatalog: true
+        });
+    });
+
+    return Array.from(mergedMap.values());
+}
+
+async function deleteCourseFromCatalog(courseCode, triggerButton) {
+    if (!db || !courseCode) return;
+    const docId = toCourseDocId(courseCode);
+    const confirmed = window.confirm('Delete this course from catalog? This does not delete uploaded papers.');
+    if (!confirmed) return;
+
+    setButtonLoading(triggerButton, true, 'Deleting...');
+    try {
+        await deleteDoc(doc(db, 'courses_catalog', docId));
+        catalogCourses = catalogCourses.filter((item) => item.id !== docId && item.courseCode !== courseCode);
+        if (currentSearchLevel === 'subject') {
+            renderSubjects((adminSearchInput?.value || '').toLowerCase());
+        }
+        showMessage('Course removed from catalog.', 'success');
+    } catch (error) {
+        console.error('Course deletion failed', error);
+        showMessage('Failed to delete course.', 'error');
+        setButtonLoading(triggerButton, false);
+    }
+}
+
+async function addCourseToCatalog() {
     if (!db) {
         showMessage('Firestore is not configured.', 'error');
         return;
     }
 
-    adminSyncCoursesBtn.disabled = true;
-    showMessage('Syncing course catalog...', 'success');
+    const code = (adminNewCourseCodeInput?.value || '').trim().toUpperCase();
+    const title = (adminNewCourseTitleInput?.value || '').trim();
 
+    if (!code || !title) {
+        showMessage('Please enter both course code and course title.', 'error');
+        return;
+    }
+
+    const courseCombined = `${code} - ${title}`;
+    const docId = toCourseDocId(code);
+
+    setButtonLoading(adminAddCourseBtn, true, 'Adding...');
     try {
-        const response = await fetch('/api/courses');
-        if (!response.ok) {
-            throw new Error(`API failed with ${response.status}`);
+        await setDoc(doc(db, 'courses_catalog', docId), {
+            courseCode: code,
+            courseTitle: title,
+            courseCombined,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        const existingIndex = catalogCourses.findIndex((item) => item.id === docId);
+        const nextEntry = {
+            id: docId,
+            courseCode: code,
+            courseTitle: title,
+            courseCombined
+        };
+        if (existingIndex >= 0) {
+            catalogCourses[existingIndex] = nextEntry;
+        } else {
+            catalogCourses.push(nextEntry);
         }
 
-        const courses = await response.json();
-        if (!Array.isArray(courses) || !courses.length) {
-            throw new Error('No courses returned by API');
+        if (adminNewCourseCodeInput) adminNewCourseCodeInput.value = '';
+        if (adminNewCourseTitleInput) adminNewCourseTitleInput.value = '';
+        if (currentSearchLevel === 'subject') {
+            renderSubjects((adminSearchInput?.value || '').toLowerCase());
         }
-
-        const normalized = [];
-        const seen = new Set();
-        courses.forEach((entry) => {
-            const item = normalizeCourseEntry(entry);
-            if (!item || seen.has(item.courseCode)) return;
-            seen.add(item.courseCode);
-            normalized.push(item);
-        });
-
-        let batch = writeBatch(db);
-        let count = 0;
-
-        for (const item of normalized) {
-            const docRef = doc(db, 'courses_catalog', item.courseCode.replace(/\//g, '-').replace(/\s+/g, ''));
-            batch.set(docRef, {
-                ...item,
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            count++;
-            if (count % 450 === 0) {
-                await batch.commit();
-                batch = writeBatch(db);
-            }
-        }
-
-        if (count % 450 !== 0) {
-            await batch.commit();
-        }
-
-        showMessage(`Course sync complete: ${count} course(s) upserted.`, 'success');
+        showMessage('Course added to catalog.', 'success');
     } catch (error) {
-        console.error('Course sync failed', error);
-        showMessage('Course sync failed. Check /api/courses and Firestore rules.', 'error');
+        console.error('Course add failed', error);
+        showMessage('Failed to add course.', 'error');
     } finally {
-        adminSyncCoursesBtn.disabled = false;
+        setButtonLoading(adminAddCourseBtn, false);
     }
 }
 
@@ -304,42 +380,56 @@ function renderSubjects(filterQuery = '') {
     adminSearchBarContainer?.classList.remove('hidden');
     if (adminSearchInput) adminSearchInput.value = filterQuery;
 
-    filteredKeys = Object.keys(groupedBySubject).filter((key) => {
+    const mergedSubjects = getMergedSubjects();
+
+    const filteredSubjects = mergedSubjects.filter((item) => {
         if (!filterQuery) return true;
-        const data = groupedBySubject[key];
-        return (`${data.courseTitle} ${key}`).toLowerCase().includes(filterQuery);
+        return (`${item.courseTitle} ${item.courseCode} ${item.courseCombined || ''}`).toLowerCase().includes(filterQuery);
     });
 
-    const totalPages = Math.max(1, Math.ceil(filteredKeys.length / SUBJECTS_PER_PAGE));
+    const totalPages = Math.max(1, Math.ceil(filteredSubjects.length / SUBJECTS_PER_PAGE));
     if (currentPage > totalPages) currentPage = totalPages;
-    const pageKeys = filteredKeys.slice((currentPage - 1) * SUBJECTS_PER_PAGE, currentPage * SUBJECTS_PER_PAGE);
+    const pageSubjects = filteredSubjects.slice((currentPage - 1) * SUBJECTS_PER_PAGE, currentPage * SUBJECTS_PER_PAGE);
 
-    if (!filteredKeys.length) {
+    if (!filteredSubjects.length) {
         allPapersList.innerHTML = '<p>No subjects found.</p>';
         return;
     }
 
-    pageKeys.forEach((key) => {
-        const data = groupedBySubject[key];
+    pageSubjects.forEach((data) => {
         const total = data.midterm.length + data.termEnd.length;
+        const canOpenPapers = total > 0;
+        const cardTitle = data.courseCombined || `${data.courseCode} - ${data.courseTitle}`;
         const card = document.createElement('div');
         card.className = 'paper-card';
-        card.style.cursor = 'pointer';
+        card.style.cursor = canOpenPapers ? 'pointer' : 'default';
         card.innerHTML = `
             <div class="paper-details" style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <h3>${escapeHtml(data.courseTitle)}</h3>
+                    <h3>${escapeHtml(cardTitle)}</h3>
                     <p style="margin: 4px 0 0; color:#888; font-size: 0.82rem;">${total} paper${total !== 1 ? 's' : ''} available</p>
                 </div>
-                <span class="material-symbols-outlined" style="font-size:1.4rem; color:#ccc; flex-shrink:0;">chevron_right</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    ${data.inCatalog ? `<button class="btn-report" data-delete-catalog="${escapeHtml(data.courseCode)}" type="button">Delete Catalog</button>` : ''}
+                    <span class="material-symbols-outlined" style="font-size:1.4rem; color:#ccc; flex-shrink:0;">${canOpenPapers ? 'chevron_right' : 'remove'}</span>
+                </div>
             </div>
         `;
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (event) => {
+            if (event.target.closest('[data-delete-catalog]')) return;
+            if (!canOpenPapers) return;
             currentSearchLevel = 'exam';
             currentSelectedSubject = data;
             renderExamTypes();
         });
         allPapersList.appendChild(card);
+    });
+
+    allPapersList.querySelectorAll('[data-delete-catalog]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const courseCode = button.getAttribute('data-delete-catalog');
+            await deleteCourseFromCatalog(courseCode, button);
+        });
     });
 
     if (totalPages > 1) {
@@ -385,7 +475,7 @@ async function deletePaperById(paperId, triggerButton) {
     const confirmed = window.confirm('Delete this paper permanently?');
     if (!confirmed) return;
 
-    if (triggerButton) triggerButton.disabled = true;
+    setButtonLoading(triggerButton, true, 'Deleting...');
 
     try {
         if (paper.fileUrl && storage) {
@@ -436,7 +526,7 @@ async function deletePaperById(paperId, triggerButton) {
     } catch (error) {
         console.error('Delete failed', error);
         showMessage('Failed to delete paper.', 'error');
-        if (triggerButton) triggerButton.disabled = false;
+        setButtonLoading(triggerButton, false);
     }
 }
 
@@ -502,15 +592,17 @@ async function loadAllData() {
     allPapersList.innerHTML = '<div class="loader"></div>';
 
     try {
-        const [papersSnapshot, reportsSnapshot, supportSnapshot] = await Promise.all([
+        const [papersSnapshot, reportsSnapshot, supportSnapshot, catalogSnapshot] = await Promise.all([
             getDocs(collection(db, 'question_papers_multi')),
             getDocs(collection(db, 'paper_reports')),
-            getDocs(collection(db, 'support_messages'))
+            getDocs(collection(db, 'support_messages')),
+            getDocs(collection(db, 'courses_catalog'))
         ]);
 
         allPapers = papersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
         allReports = reportsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
         allSupportMessages = supportSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+        catalogCourses = catalogSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
 
         buildGroupedBySubject();
         currentSearchLevel = 'subject';
@@ -531,10 +623,11 @@ adminTabReported?.addEventListener('click', () => setActiveTab('reported'));
 adminTabMessages?.addEventListener('click', () => setActiveTab('messages'));
 adminTabPapers?.addEventListener('click', () => {
     setActiveTab('papers');
-    if (currentSearchLevel === 'subject') {
-        currentPage = 1;
-        renderSubjects((adminSearchInput?.value || '').toLowerCase());
-    }
+    currentSearchLevel = 'subject';
+    currentSelectedSubject = null;
+    currentSelectedExam = null;
+    currentPage = 1;
+    renderSubjects((adminSearchInput?.value || '').toLowerCase());
 });
 
 adminSearchInput?.addEventListener('input', (e) => {
@@ -555,6 +648,7 @@ adminSearchBackBtn?.addEventListener('click', () => {
 });
 
 adminLogoutBtn?.addEventListener('click', async () => {
+    setButtonLoading(adminLogoutBtn, true, 'Signing out...');
     try {
         await signOut(auth);
     } finally {
@@ -562,8 +656,8 @@ adminLogoutBtn?.addEventListener('click', async () => {
     }
 });
 
-adminSyncCoursesBtn?.addEventListener('click', async () => {
-    await syncCoursesCatalogFromApi();
+adminAddCourseBtn?.addEventListener('click', async () => {
+    await addCourseToCatalog();
 });
 
 if (!auth) {

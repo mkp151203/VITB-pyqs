@@ -46,6 +46,20 @@ function openModal(modal) {
     modal?.classList.remove('hidden');
 }
 
+function setButtonLoading(button, loading, loadingText = 'Please wait...') {
+    if (!button) return;
+    if (loading) {
+        if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+        button.innerHTML = loadingText;
+        button.classList.add('is-loading');
+        button.disabled = true;
+    } else {
+        if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+    }
+}
+
 export function initFeedback() {
     const reportModal = document.getElementById('report-modal');
     const supportModal = document.getElementById('support-modal');
@@ -97,18 +111,22 @@ export function initFeedback() {
     });
 
     reportSendBtn?.addEventListener('click', async () => {
+        setButtonLoading(reportSendBtn, true, 'Reporting...');
         if (!db) {
             showMessage('Reports are unavailable right now.', 'error');
+            setButtonLoading(reportSendBtn, false);
             return;
         }
         if (!activePaper || !activePaper.id) {
             showMessage('Invalid paper selected for reporting.', 'error');
+            setButtonLoading(reportSendBtn, false);
             return;
         }
 
         const rate = canProceedWithRateLimit(REPORT_RATE_KEY, 5, 60 * 60 * 1000);
         if (!rate.allowed) {
             showMessage('Report limit reached. Please try again in some time.', 'error');
+            setButtonLoading(reportSendBtn, false);
             return;
         }
 
@@ -129,27 +147,33 @@ export function initFeedback() {
 
             closeModal(reportModal);
             showMessage('Report submitted. Thank you.', 'success');
+            setButtonLoading(reportSendBtn, false);
         } catch (error) {
             console.error('Report submit failed', error);
             showMessage('Failed to send report. Please try again.', 'error');
+            setButtonLoading(reportSendBtn, false);
         }
     });
 
     supportSendBtn?.addEventListener('click', async () => {
+        setButtonLoading(supportSendBtn, true, 'Sending...');
         if (!db) {
             showMessage('Support is unavailable right now.', 'error');
+            setButtonLoading(supportSendBtn, false);
             return;
         }
 
         const message = (supportTextarea?.value || '').trim();
         if (message.length < 10) {
             showMessage('Please enter at least 10 characters.', 'error');
+            setButtonLoading(supportSendBtn, false);
             return;
         }
 
         const rate = canProceedWithRateLimit(SUPPORT_RATE_KEY, 3, 24 * 60 * 60 * 1000);
         if (!rate.allowed) {
             showMessage('Daily support message limit reached.', 'error');
+            setButtonLoading(supportSendBtn, false);
             return;
         }
 
@@ -161,9 +185,11 @@ export function initFeedback() {
             });
             closeModal(supportModal);
             showMessage('Support message sent.', 'success');
+            setButtonLoading(supportSendBtn, false);
         } catch (error) {
             console.error('Support send failed', error);
             showMessage('Failed to send support message.', 'error');
+            setButtonLoading(supportSendBtn, false);
         }
     });
 }

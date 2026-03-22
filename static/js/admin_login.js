@@ -13,6 +13,20 @@ import {
 
 const googleSigninBtn = document.getElementById('google-signin-btn');
 
+function setButtonLoading(button, loading, loadingText = 'Please wait...') {
+    if (!button) return;
+    if (loading) {
+        if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+        button.innerHTML = loadingText;
+        button.classList.add('is-loading');
+        button.disabled = true;
+    } else {
+        if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+    }
+}
+
 function showMessage(message, type = 'error') {
     const el = document.getElementById('global-message');
     if (!el) return;
@@ -56,12 +70,12 @@ async function handleSignedInUser(user) {
         }
         await signOut(auth);
         showMessage('This Google account is not allowed for admin access.');
-        if (googleSigninBtn) googleSigninBtn.disabled = false;
+        setButtonLoading(googleSigninBtn, false);
     } catch (error) {
         console.error('Admin verification failed', error);
         await signOut(auth);
         showMessage('Failed to verify admin access.');
-        if (googleSigninBtn) googleSigninBtn.disabled = false;
+        setButtonLoading(googleSigninBtn, false);
     }
 }
 
@@ -91,7 +105,7 @@ async function setupGoogleSignIn() {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
 
-        googleSigninBtn.disabled = true;
+        setButtonLoading(googleSigninBtn, true, 'Opening sign-in...');
         showMessage('Opening Google sign-in...', 'success');
 
         try {
@@ -106,7 +120,7 @@ async function setupGoogleSignIn() {
             }
             console.error('Popup sign-in failed', error);
             showMessage(getReadableAuthError(error));
-            googleSigninBtn.disabled = false;
+            setButtonLoading(googleSigninBtn, false);
         }
     });
 }

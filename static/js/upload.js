@@ -1,5 +1,5 @@
 // upload.js — File handling, arrange grid, OCR metadata, PDF generation & Firebase upload
-import { db, storage, collection, addDoc, ref, uploadBytes, getDownloadURL } from './firebase.js';
+import { db, storage, collection, addDoc, doc, setDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } from './firebase.js';
 import { checkSimilarityWithDatabase } from './similarity.js';
 import { openCropView, init as initCrop } from './crop.js';
 
@@ -55,6 +55,10 @@ const fileInputMulti = document.getElementById('file-input-multi');
 const cameraInput = document.getElementById('camera-input');
 const pagesGrid = document.getElementById('pages-grid');
 const btnNextMetadata = document.getElementById('btn-next-metadata');
+const btnUpload = document.getElementById('btn-upload');
+const btnCamera = document.getElementById('btn-camera');
+const btnAddGallery = document.getElementById('btn-add-gallery');
+const btnAddCamera = document.getElementById('btn-add-camera');
 
 // View management (set from app.js)
 let _showView = null;
@@ -83,84 +87,112 @@ function showMsg(msg, type) {
     setTimeout(() => el.innerText='', 4000);
 }
 
+function setButtonLoading(button, loading, loadingText = 'Please wait...') {
+    if (!button) return;
+    if (loading) {
+        if (!button.dataset.originalText) {
+            button.dataset.originalText = button.innerHTML;
+        }
+        button.innerHTML = loadingText;
+        button.classList.add('is-loading');
+        button.disabled = true;
+    } else {
+        if (button.dataset.originalText) {
+            button.innerHTML = button.dataset.originalText;
+        }
+        button.classList.remove('is-loading');
+        button.disabled = false;
+    }
+}
+
 // === File Selection ===
 document.getElementById('btn-camera').addEventListener('click', () => cameraInput.click());
 document.getElementById('btn-upload').addEventListener('click', () => fileInputMulti.click());
 
 async function handleFiles(files, fromCamera=false) {
+    const primaryBtn = fromCamera ? btnCamera : btnUpload;
+    const secondaryBtn = fromCamera ? btnAddCamera : btnAddGallery;
+
     if (!files.length) return;
+    setButtonLoading(primaryBtn, true, fromCamera ? 'Processing...' : 'Uploading...');
+    setButtonLoading(secondaryBtn, true, fromCamera ? 'Processing...' : 'Uploading...');
     
-    if (pagesArray.length + files.length > 10) {
-        alert("Maximum limit of 10 pages allowed per document. Only the first 10 pages will be kept.");
-        files = files.slice(0, Math.max(0, 10 - pagesArray.length));
-        if (files.length === 0) return;
-    }
-    
-    let lastAddedId = null;
-    for (const file of files) {
-        let dataUrl = await fileToDataUrl(file);
+    try {
+        if (pagesArray.length + files.length > 10) {
+            alert("Maximum limit of 10 pages allowed per document. Only the first 10 pages will be kept.");
+            files = files.slice(0, Math.max(0, 10 - pagesArray.length));
+            if (files.length === 0) return;
+        }
         
-        dataUrl = await new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const maxSize = 1600;
-                let w = img.width;
-                let h = img.height;
-                
-                if (w > maxSize || h > maxSize) {
-                    if (w > h) { h = Math.round(h * (maxSize / w)); w = maxSize; }
-                    else { w = Math.round(w * (maxSize / h)); h = maxSize; }
-                }
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                
-                let quality = 0.85;
-                let resUrl = canvas.toDataURL('image/webp', quality);
-                let kb = Math.round((resUrl.length * 0.75) / 1024);
-                
-                while (kb > 200 && quality > 0.3) {
-                    quality -= 0.15;
-                    resUrl = canvas.toDataURL('image/webp', quality);
-                    kb = Math.round((resUrl.length * 0.75) / 1024);
-                }
-                
-                while (kb > 200 && w > 800) {
-                    w = Math.round(w * 0.85);
-                    h = Math.round(h * 0.85);
+        let lastAddedId = null;
+        for (const file of files) {
+            let dataUrl = await fileToDataUrl(file);
+            
+            dataUrl = await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxSize = 1600;
+                    let w = img.width;
+                    let h = img.height;
+                    
+                    if (w > maxSize || h > maxSize) {
+                        if (w > h) { h = Math.round(h * (maxSize / w)); w = maxSize; }
+                        else { w = Math.round(w * (maxSize / h)); h = maxSize; }
+                    }
+                    
+                    const canvas = document.createElement('canvas');
                     canvas.width = w;
                     canvas.height = h;
+                    const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, w, h);
-                    resUrl = canvas.toDataURL('image/webp', quality);
-                    kb = Math.round((resUrl.length * 0.75) / 1024);
-                }
+                    
+                    let quality = 0.85;
+                    let resUrl = canvas.toDataURL('image/webp', quality);
+                    let kb = Math.round((resUrl.length * 0.75) / 1024);
+                    
+                    while (kb > 200 && quality > 0.3) {
+                        quality -= 0.15;
+                        resUrl = canvas.toDataURL('image/webp', quality);
+                        kb = Math.round((resUrl.length * 0.75) / 1024);
+                    }
+                    
+                    while (kb > 200 && w > 800) {
+                        w = Math.round(w * 0.85);
+                        h = Math.round(h * 0.85);
+                        canvas.width = w;
+                        canvas.height = h;
+                        ctx.drawImage(img, 0, 0, w, h);
+                        resUrl = canvas.toDataURL('image/webp', quality);
+                        kb = Math.round((resUrl.length * 0.75) / 1024);
+                    }
 
-                resolve(resUrl);
-            };
-            img.src = dataUrl;
-        });
+                    resolve(resUrl);
+                };
+                img.src = dataUrl;
+            });
 
-        lastAddedId = 'page_' + Date.now() + Math.random().toString(36).substr(2, 5);
-        pagesArray.push({
-            id: lastAddedId,
-            originalFile: file,
-            originalDataUrl: dataUrl,
-            displayDataUrl: dataUrl,
-            croppedBlob: null,
-            cropPoints: null,
-            rotation: 0
-        });
-    }
-    fileInputMulti.value = '';
-    cameraInput.value = '';
-    renderArrangeGrid();
-    if (fromCamera && lastAddedId) {
-        openCropView(lastAddedId);
-    } else {
-        _showView('arrange');
+            lastAddedId = 'page_' + Date.now() + Math.random().toString(36).substr(2, 5);
+            pagesArray.push({
+                id: lastAddedId,
+                originalFile: file,
+                originalDataUrl: dataUrl,
+                displayDataUrl: dataUrl,
+                croppedBlob: null,
+                cropPoints: null,
+                rotation: 0
+            });
+        }
+        fileInputMulti.value = '';
+        cameraInput.value = '';
+        renderArrangeGrid();
+        if (fromCamera && lastAddedId) {
+            openCropView(lastAddedId);
+        } else {
+            _showView('arrange');
+        }
+    } finally {
+        setButtonLoading(primaryBtn, false);
+        setButtonLoading(secondaryBtn, false);
     }
 }
 
@@ -228,6 +260,7 @@ new Sortable(pagesGrid, {
 // === OCR on Page 1 (Metadata) ===
 btnNextMetadata.addEventListener('click', async () => {
     if (pagesArray.length === 0) return;
+    setButtonLoading(btnNextMetadata, true, 'Detecting...');
     _showView('metadata');
     document.getElementById('metadata-loading').classList.remove('hidden');
     document.getElementById('metadata-form').classList.add('hidden');
@@ -266,6 +299,8 @@ btnNextMetadata.addEventListener('click', async () => {
     } catch (e) {
         console.error("Page 1 OCR Failed", e);
         document.getElementById('extracted-text-pg1').value = "OCR Failed or image unreadable.";
+    } finally {
+        setButtonLoading(btnNextMetadata, false);
     }
     
     document.getElementById('metadata-loading').classList.add('hidden');
@@ -275,6 +310,7 @@ btnNextMetadata.addEventListener('click', async () => {
 document.getElementById('course-title').addEventListener('change', (e) => {
     const courseComb = e.target.value;
     const text = document.getElementById('extracted-text-pg1').value;
+    if (courseComb === '__other__') return;
     if (courseComb && text) {
         checkSimilarityWithDatabase(courseComb, text);
     }
@@ -283,6 +319,7 @@ document.getElementById('course-title').addEventListener('change', (e) => {
 // === Process & Upload File ===
 document.getElementById('metadata-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const uploadBtn = document.getElementById('btn-upload-final');
     if (!db || !storage) { showMsg("Firebase is disabled or misconfigured.", "error"); return; }
     
     // Rate limit guard
@@ -291,7 +328,23 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         return;
     }
     
-    const courseCombinedVal = document.getElementById('course-title').value;
+    const selectedCourseValue = document.getElementById('course-title').value;
+    const isCustomCourse = selectedCourseValue === '__other__';
+    const customCourseCode = (document.getElementById('custom-course-code')?.value || '').trim().toUpperCase();
+    const customCourseTitle = (document.getElementById('custom-course-title')?.value || '').trim();
+
+    let courseCombinedVal = selectedCourseValue;
+    let courseCodeVal = '';
+
+    if (isCustomCourse) {
+        if (!customCourseCode || !customCourseTitle) {
+            showMsg('Please enter both course code and course title for Other.', 'error');
+            return;
+        }
+        courseCodeVal = customCourseCode;
+        courseCombinedVal = `${customCourseCode} - ${customCourseTitle}`;
+    }
+
     if (!courseCombinedVal || courseCombinedVal.trim() === '') {
         showMsg("Course Name is mandatory. Please select a course.", "error");
         return;
@@ -302,6 +355,8 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         showMsg("Exam Name is mandatory. Please select an exam.", "error");
         return;
     }
+
+    setButtonLoading(uploadBtn, true, 'Processing...');
     
     _showView('processing');
     const pTitle = document.getElementById('processing-title');
@@ -309,12 +364,14 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
     const pBar = document.getElementById('progress-bar');
     
     try {
-        const courseCombined = document.getElementById('course-title').value || 'UNKNOWN';
+        const courseCombined = courseCombinedVal || 'UNKNOWN';
         const examName = document.getElementById('exam-name').value || 'UNKNOWN';
         
-        let courseCode = "UNKNOWN";
-        if (courseCombined.includes(" - ")) courseCode = courseCombined.split(" - ")[0].trim();
-        else courseCode = courseCombined.substring(0, 10).replace(/[^A-Za-z0-9]/g, '');
+        let courseCode = courseCodeVal || "UNKNOWN";
+        if (!courseCodeVal) {
+            if (courseCombined.includes(" - ")) courseCode = courseCombined.split(" - ")[0].trim();
+            else courseCode = courseCombined.substring(0, 10).replace(/[^A-Za-z0-9]/g, '');
+        }
 
         let fullExtractedText = pagesArray[0].text + "\n\n";
 
@@ -410,6 +467,20 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             fileUrl: downloadUrl,
             createdAt: new Date().toISOString()
         });
+
+        if (isCustomCourse) {
+            try {
+                const catalogId = courseCode.replace(/\//g, '-').replace(/\s+/g, '');
+                await setDoc(doc(db, 'courses_catalog', catalogId), {
+                    courseCode,
+                    courseTitle: customCourseTitle,
+                    courseCombined,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            } catch (catalogError) {
+                console.warn('Unable to sync custom course to courses_catalog:', catalogError);
+            }
+        }
         
         // Increment the daily upload counter
         const uploadsToday = incrementUploadCount();
@@ -423,6 +494,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             initCrop(pagesArray, _showView, renderArrangeGrid);
             document.getElementById('metadata-form').reset();
             document.getElementById('course-select-text').innerText = 'Select a course...';
+            document.getElementById('custom-course-fields')?.classList.add('hidden');
             renderArrangeGrid();
             // Re-check rate limit in case it was the 20th upload
             checkRateLimit();
@@ -435,5 +507,6 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         pTitle.innerText = "Error Occurred";
         pStatus.innerText = e.message;
         pStatus.style.color = "red";
+        setButtonLoading(uploadBtn, false);
     }
 });

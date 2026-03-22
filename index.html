@@ -26,6 +26,14 @@
     <meta name="twitter:description" content="Find VITB question papers by course title or course code.">
     <meta name="twitter:image" content="https://ques-paper-repo.vercel.app/static/logo.png">
 
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VY7PDX9ERX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-VY7PDX9ERX');
+    </script>
+
     <link rel="stylesheet" href="static/css/style.css">
     <!-- Google Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -201,6 +209,23 @@
                             <ul id="course-options-list" class="custom-options-list"></ul>
                         </div>
                         <input type="hidden" id="course-title" name="course_title" required>
+                    </div>
+
+                    <div id="custom-course-fields" class="hidden">
+                        <div class="form-group">
+                            <label for="custom-course-code">
+                                <span class="material-symbols-outlined label-icon">tag</span>
+                                Course Code
+                            </label>
+                            <input type="text" id="custom-course-code" name="custom_course_code" placeholder="e.g. CSE1234">
+                        </div>
+                        <div class="form-group">
+                            <label for="custom-course-title">
+                                <span class="material-symbols-outlined label-icon">edit_note</span>
+                                Course Title
+                            </label>
+                            <input type="text" id="custom-course-title" name="custom_course_title" placeholder="e.g. Data Structures">
+                        </div>
                     </div>
 
                     <div class="form-group">

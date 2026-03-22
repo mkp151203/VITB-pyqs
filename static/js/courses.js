@@ -2,6 +2,41 @@
 import { db, collection, getDocs } from './firebase.js';
 
 let allCoursesList = [];
+const OTHER_COURSE_VALUE = '__other__';
+
+function toggleCustomCourseFields(show) {
+    const wrapper = document.getElementById('custom-course-fields');
+    const codeInput = document.getElementById('custom-course-code');
+    const titleInput = document.getElementById('custom-course-title');
+    if (!wrapper || !codeInput || !titleInput) return;
+
+    if (show) {
+        wrapper.classList.remove('hidden');
+        codeInput.required = true;
+        titleInput.required = true;
+    } else {
+        wrapper.classList.add('hidden');
+        codeInput.required = false;
+        titleInput.required = false;
+        codeInput.value = '';
+        titleInput.value = '';
+    }
+}
+
+function selectCourse(value, label = value) {
+    const courseTitleInput = document.getElementById('course-title');
+    const courseText = document.getElementById('course-select-text');
+    const dropdown = document.getElementById('course-select-dropdown');
+    if (!courseTitleInput || !courseText) return;
+
+    courseTitleInput.value = value;
+    courseText.innerText = label;
+    dropdown?.classList.add('hidden');
+    toggleCustomCourseFields(value === OTHER_COURSE_VALUE);
+
+    const ev = new Event('change');
+    courseTitleInput.dispatchEvent(ev);
+}
 
 function normalizeCourseString(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -78,18 +113,21 @@ function renderCourseOptions(courses) {
     const listEl = document.getElementById('course-options-list');
     if(!listEl) return;
     listEl.innerHTML = '';
+
+    const otherLi = document.createElement('li');
+    otherLi.textContent = 'Other';
+    otherLi.dataset.value = OTHER_COURSE_VALUE;
+    otherLi.addEventListener('click', () => {
+        selectCourse(OTHER_COURSE_VALUE, 'Other');
+    });
+    listEl.appendChild(otherLi);
+
     courses.forEach(c => {
         const li = document.createElement('li');
         li.textContent = c;
         li.dataset.value = c;
         li.addEventListener('click', () => {
-            document.getElementById('course-title').value = c;
-            document.getElementById('course-select-text').innerText = c;
-            document.getElementById('course-select-dropdown').classList.add('hidden');
-            
-            // Trigger change for similarity checking
-            const ev = new Event('change');
-            document.getElementById('course-title').dispatchEvent(ev);
+            selectCourse(c, c);
         });
         listEl.appendChild(li);
     });

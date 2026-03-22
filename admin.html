@@ -20,7 +20,6 @@
                 </div>
             </div>
             <div style="padding-bottom: 12px; display:flex; gap:8px; flex-wrap:wrap;">
-                <button id="admin-sync-courses-btn" class="btn btn-primary btn-sm" type="button">Sync Courses</button>
                 <button id="admin-logout-btn" class="btn btn-secondary btn-sm" type="button">Logout</button>
             </div>
         </header>
@@ -50,6 +49,15 @@
             </section>
 
             <section id="admin-papers-view" class="hidden">
+                <div class="paper-card" style="margin-bottom:14px;">
+                    <h3 style="margin-top:0;">Add Course to Catalog</h3>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+                        <input type="text" id="admin-new-course-code" placeholder="Course code (e.g. CSE2001)">
+                        <input type="text" id="admin-new-course-title" placeholder="Course title (e.g. Data Structures)">
+                        <button id="admin-add-course-btn" class="btn btn-primary btn-sm" type="button">Add Course</button>
+                    </div>
+                </div>
+
                 <div id="admin-search-navigation" class="search-nav hidden">
                     <button id="admin-btn-search-back" class="btn btn-secondary btn-sm" type="button">
                         <span class="material-symbols-outlined btn-icon-sm">arrow_back</span>Back
