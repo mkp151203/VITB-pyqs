@@ -356,7 +356,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         return;
     }
 
-    setButtonLoading(uploadBtn, true, 'Processing...');
+    setButtonLoading(uploadBtn, true, uploadBtn?.innerHTML || 'Process All Pages &amp; Upload');
     
     _showView('processing');
     const pTitle = document.getElementById('processing-title');
