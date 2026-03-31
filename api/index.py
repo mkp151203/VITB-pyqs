@@ -3,6 +3,7 @@ import re
 import os
 import difflib
 import html
+import json
 from urllib.parse import quote
 import requests as http_req
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, redirect
@@ -15,7 +16,52 @@ load_dotenv()
 app = Flask(__name__, static_folder="../static", template_folder="../")
 CORS(app)
 
+# ── Firestore course loading via firebase-admin ──
+def load_courses_from_firestore():
+    """Try to load courses from Firestore courses_catalog collection."""
+    loaded = {}
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore as fs
+
+        if not firebase_admin._apps:
+            # Try service account path, then JSON env var, then project-id-only
+            sa_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_KEY_PATH', '').strip()
+            sa_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON', '').strip()
+            project_id = os.environ.get('FIREBASE_PROJECT_ID', '').strip()
+
+            if sa_path and os.path.exists(sa_path):
+                cred = credentials.Certificate(sa_path)
+                firebase_admin.initialize_app(cred)
+            elif sa_json:
+                cred = credentials.Certificate(json.loads(sa_json))
+                firebase_admin.initialize_app(cred)
+            elif project_id:
+                # Application Default Credentials (works on GCP / local with gcloud auth)
+                try:
+                    firebase_admin.initialize_app(options={'projectId': project_id})
+                except Exception:
+                    return loaded
+            else:
+                return loaded
+
+        db = fs.client()
+        docs = db.collection('courses_catalog').stream()
+        for doc in docs:
+            data = doc.to_dict() or {}
+            code = (data.get('courseCode') or data.get('code') or '').strip().upper()
+            title = (data.get('courseTitle') or data.get('title') or '').strip()
+            if code and title:
+                loaded[code] = title
+        if loaded:
+            print(f"Loaded {len(loaded)} courses from Firestore courses_catalog")
+    except Exception as e:
+        print(f"Firestore course load skipped: {e}")
+    return loaded
+
+
 def load_courses_dict():
+    """Load courses from CSV (fallback source)."""
     loaded = {}
     current_dir = os.path.dirname(os.path.abspath(__file__))
     candidate_paths = [
@@ -49,7 +95,20 @@ def load_courses_dict():
 
     return loaded
 
-courses_dict = load_courses_dict()
+
+def load_all_courses():
+    """Load courses from Firestore first, then merge with CSV as fallback."""
+    # Firestore = primary
+    firestore_courses = load_courses_from_firestore()
+    # CSV = fallback
+    csv_courses = load_courses_dict()
+    # Merge: CSV first, then Firestore overwrites (Firestore takes priority)
+    merged = {**csv_courses, **firestore_courses}
+    print(f"Total courses loaded: {len(merged)} (Firestore: {len(firestore_courses)}, CSV: {len(csv_courses)})")
+    return merged
+
+
+courses_dict = load_all_courses()
 
 HEADER_STOP_REGEX = re.compile(
     r'\b(?:questions?|answer(?:\s+all)?|marks?|question\s*description|part\s*[a-z]|section\s*[a-z])\b',
@@ -77,7 +136,7 @@ def get_site_url():
 def get_sorted_courses():
     global courses_dict
     if not courses_dict:
-        courses_dict = load_courses_dict()
+        courses_dict = load_all_courses()
     return sorted(courses_dict.items(), key=lambda item: item[0])
 
 
@@ -459,7 +518,7 @@ def parse_text():
 def get_courses():
     global courses_dict
     if not courses_dict:
-        courses_dict = load_courses_dict()
+        courses_dict = load_all_courses()
     courses_list = [f"{code} - {title}" for code, title in courses_dict.items()]
     courses_list.sort()
     return jsonify(courses_list)

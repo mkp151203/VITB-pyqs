@@ -7,7 +7,7 @@ import { openCropView, init as initCrop } from './crop.js';
 const RATE_LIMIT = 20;
 const RATE_KEY = 'pyq_upload_count';
 const RATE_DATE_KEY = 'pyq_upload_date';
-const SHOW_EXTRACTED_TEXT_PREVIEW = false;
+const SHOW_EXTRACTED_TEXT_PREVIEW = true;
 const PENDING_REQUEST_KEY = 'pyq_pending_request';
 
 function getTodayStr() {

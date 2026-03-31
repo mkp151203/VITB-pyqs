@@ -83,19 +83,24 @@ async function loadCoursesFromFirestore() {
 }
 
 export async function loadCourseCatalog() {
+    // Load from both sources and merge (Firestore primary, CSV fallback)
+    let firestoreCourses = [];
+    let apiCourses = [];
+
     try {
-        const firestoreCourses = await loadCoursesFromFirestore();
-        if (firestoreCourses.length) return firestoreCourses;
+        firestoreCourses = await loadCoursesFromFirestore();
     } catch (e) {
-        console.warn('Firestore courses_catalog unavailable, trying API fallback:', e.message || e);
+        console.warn('Firestore courses_catalog unavailable:', e.message || e);
     }
 
     try {
-        return await loadCoursesFromApi();
+        apiCourses = await loadCoursesFromApi();
     } catch (e) {
-        console.error('API course fallback failed:', e);
-        return [];
+        console.warn('API courses fallback unavailable:', e.message || e);
     }
+
+    // Merge both lists — Firestore entries take priority via deduplication
+    return dedupeAndSortCourses([...firestoreCourses, ...apiCourses]);
 }
 
 export async function fetchCourses() {
