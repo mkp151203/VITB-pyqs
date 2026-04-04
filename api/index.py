@@ -6,6 +6,10 @@ import html
 import json
 from urllib.parse import quote
 import requests as http_req
+import base64
+import io
+from google import genai
+from PIL import Image
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, redirect
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -16,47 +20,45 @@ load_dotenv()
 app = Flask(__name__, static_folder="../static", template_folder="../")
 CORS(app)
 
-# ── Firestore course loading via firebase-admin ──
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+# ── Firestore course loading via REST API ──
 def load_courses_from_firestore():
-    """Try to load courses from Firestore courses_catalog collection."""
+    """Try to load courses from Firestore courses_catalog collection via REST API."""
     loaded = {}
     try:
-        import firebase_admin
-        from firebase_admin import credentials, firestore as fs
+        project_id = os.environ.get('FIREBASE_PROJECT_ID', '').strip()
+        if not project_id:
+            return loaded
 
-        if not firebase_admin._apps:
-            # Try service account path, then JSON env var, then project-id-only
-            sa_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_KEY_PATH', '').strip()
-            sa_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON', '').strip()
-            project_id = os.environ.get('FIREBASE_PROJECT_ID', '').strip()
-
-            if sa_path and os.path.exists(sa_path):
-                cred = credentials.Certificate(sa_path)
-                firebase_admin.initialize_app(cred)
-            elif sa_json:
-                cred = credentials.Certificate(json.loads(sa_json))
-                firebase_admin.initialize_app(cred)
-            elif project_id:
-                # Application Default Credentials (works on GCP / local with gcloud auth)
-                try:
-                    firebase_admin.initialize_app(options={'projectId': project_id})
-                except Exception:
-                    return loaded
-            else:
-                return loaded
-
-        db = fs.client()
-        docs = db.collection('courses_catalog').stream()
-        for doc in docs:
-            data = doc.to_dict() or {}
-            code = (data.get('courseCode') or data.get('code') or '').strip().upper()
-            title = (data.get('courseTitle') or data.get('title') or '').strip()
-            if code and title:
-                loaded[code] = title
-        if loaded:
-            print(f"Loaded {len(loaded)} courses from Firestore courses_catalog")
+        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/courses_catalog?pageSize=1000"
+        
+        response = http_req.get(url, timeout=7)
+        if response.status_code == 200:
+            data = response.json()
+            documents = data.get('documents', [])
+            for doc in documents:
+                fields = doc.get('fields', {})
+                
+                code_field = fields.get('courseCode') or fields.get('code')
+                title_field = fields.get('courseTitle') or fields.get('title')
+                
+                if code_field and title_field:
+                    code_val = code_field.get('stringValue', '')
+                    title_val = title_field.get('stringValue', '')
+                    
+                    code = code_val.strip().upper()
+                    title = title_val.strip()
+                    
+                    if code and title:
+                        loaded[code] = title
+                        
+            if loaded:
+                print(f"Loaded {len(loaded)} courses from Firestore (Client REST API)")
+        else:
+            print(f"Firestore REST API load skipped: Status {response.status_code}")
     except Exception as e:
-        print(f"Firestore course load skipped: {e}")
+        print(f"Firestore course load skipped (REST Client Error): {e}")
     return loaded
 
 
@@ -229,32 +231,46 @@ def get_course_details_from_csv(extracted_code, extracted_title, full_text):
     if not courses_dict:
         return extracted_code, extracted_title
 
+    # 1. Fuzzy match for Course Code
     if extracted_code != "Not Found":
-        cleaned_code = extracted_code.replace('O', '0').replace('I', '1').replace('l', '1').replace('S', '5')
+        cleaned_code = extracted_code.replace('O', '0').replace('I', '1').replace('l', '1').replace('S', '5').upper()
         matches = difflib.get_close_matches(cleaned_code, courses_dict.keys(), n=1, cutoff=0.7)
         if matches:
             return matches[0], courses_dict[matches[0]]
             
+    # 2. Case-insensitive Fuzzy match for Course Title (Fixing "&" vs "AND")
     if extracted_title != "Not Found":
-        matches = difflib.get_close_matches(extracted_title, list(courses_dict.values()), n=1, cutoff=0.6)
+        extracted_title_norm = extracted_title.upper().replace('&', 'AND')
+        
+        # Build dictionary mapping normalized uppercase titles to their original format
+        title_map = {}
+        for c, t in courses_dict.items():
+            norm_t = t.upper().replace('&', 'AND')
+            title_map[norm_t] = (c, t)
+            
+        matches = difflib.get_close_matches(extracted_title_norm, list(title_map.keys()), n=1, cutoff=0.6)
         if matches:
-            matched_title = matches[0]
-            for c, t in courses_dict.items():
-                if t == matched_title:
-                    return c, matched_title
+            return title_map[matches[0]]
                     
-    text_upper = full_text.upper()
+    # 3. Brute-force substring search on the entire extracted header text
+    text_upper = full_text.upper().replace('&', 'AND')
     text_letters_digits = re.sub(r'[^A-Z0-9]', '', text_upper)
-    text_code_search = text_letters_digits.replace('O', '0').replace('I', '1').replace('L', '1').replace('S', '5')
     
+    # Mangle text (simulate common OCR errors uniformly)
+    text_mangled = text_letters_digits.replace('O', '0').replace('I', '1').replace('L', '1').replace('S', '5')
+    
+    # 3a. Search for mangled code in mangled text
     for code, title in courses_dict.items():
-        if code in text_code_search:
+        if code in text_mangled:
             return code, title
             
+    # 3b. Search for mangled title in mangled text 
     for code, title in courses_dict.items():
-        title_norm = re.sub(r'[^A-Z0-9]', '', title.upper())
-        if len(title_norm) > 10 and title_norm in text_letters_digits:
-            return code, title
+        title_norm = re.sub(r'[^A-Z0-9]', '', title.upper().replace('&', 'AND'))
+        if len(title_norm) > 10:
+            title_mangled = title_norm.replace('O', '0').replace('I', '1').replace('L', '1').replace('S', '5')
+            if title_mangled in text_mangled or title_norm in text_letters_digits:
+                return code, title
             
     return "Not Found", "Not Found"
 
@@ -451,67 +467,176 @@ def serve_static(filename):
 @app.route('/api/parse', methods=['POST'])
 def parse_text():
     data = request.get_json()
-    if not data or 'text' not in data:
-         return jsonify({"error": "No text provided"}), 400
+    if not data:
+         return jsonify({"error": "No data provided"}), 400
          
-    text_clean = data['text'].replace('\n', ' ')
+    text_raw = data.get('text', '')
+    image_base64 = data.get('image_base64', '')
+    
+    course_combined = ""
+    exam_name = ""
+    extracted_slot = ""
+    is_question_paper = True
+    
+    # --- GEMINI PRIMARY PATH ---
+    gemini_success = False
+    gemini_api_failed = False
+    if image_base64 and GEMINI_API_KEY:
+        try:
+            # Clean base64 header (e.g. data:image/webp;base64,xxxx)
+            if ',' in image_base64:
+                b64_data = image_base64.split(',')[1]
+            else:
+                b64_data = image_base64
+            img_bytes = base64.b64decode(b64_data)
+            img = Image.open(io.BytesIO(img_bytes))
+            
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            prompt = """
+Extract the following fields from this exam paper image and return ONLY JSON:
+
+{
+  "course_title": "",
+  "course_code": "",
+  "slot": "",
+  "extracted text": "",
+  "question paper(yes/no)": ""
+}
+
+Rules:
+- Do NOT include any explanation
+- Return only valid JSON
+- give response question paper as "yes" only if it is a valid university exam question paper else give "no" as response
+- extracted text field should only contain lowercase text with no spaces
+- For 'extracted text', limit your transcription to ONLY the very first 650 characters of the document. Do not transcribe the entire page in order to save tokens!
+"""
+            from google.genai import types
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=[prompt, img],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                )
+            )
+            resp_text = response.text.strip()
+            print("--- GEMINI RAW RESPONSE ---", flush=True)
+            print(resp_text, flush=True)
+            print("---------------------------", flush=True)
+            
+            if resp_text.startswith("```json"):
+                resp_text = resp_text[7:]
+            if resp_text.startswith("```"):
+                resp_text = resp_text[3:]
+            if resp_text.endswith("```"):
+                resp_text = resp_text[:-3]
+                
+            cleaned_resp = resp_text.strip()
+            gemini_json = None
+            
+            while cleaned_resp:
+                try:
+                    gemini_json = json.loads(cleaned_resp)
+                    break
+                except json.JSONDecodeError:
+                    if cleaned_resp.endswith('}'):
+                        cleaned_resp = cleaned_resp[:-1].strip()
+                    else:
+                        break
+            
+            if gemini_json is None:
+                raise ValueError("Failed to parse Gemini JSON output due to unrecoverable formatting")
+            
+            g_course_code = str(gemini_json.get("course_code") or "").strip()
+            g_course_title = str(gemini_json.get("course_title") or "").strip()
+            extracted_slot = str(gemini_json.get("slot") or "").strip()
+            gemini_text = str(gemini_json.get("extracted text") or "")
+            q_paper_val = str(gemini_json.get("question paper(yes/no)") or "yes").lower()
+            
+            if q_paper_val == "no":
+                is_question_paper = False
+                
+            if gemini_text:
+                # Merge the LLM dense text with existing raw text for regex parsing capability in fallback
+                text_raw = gemini_text
+            
+            if g_course_code or g_course_title:
+                code, title = get_course_details_from_csv(g_course_code or "Not Found", g_course_title or "Not Found", text_raw)
+                
+                if code != "Not Found" and title != "Not Found":
+                    course_code = code
+                    course_title = title
+                    course_combined = f"{course_code} - {course_title}"
+                    gemini_success = True
+                else:
+                    gemini_success = False
+            else:
+                gemini_success = False
+                
+        except Exception as e:
+            print(f"Gemini Extraction Failed: {e}")
+            gemini_success = False
+            gemini_api_failed = True
+
+    # --- REGEX FALLBACK PATH ---
+    text_clean = text_raw.replace('\n', ' ')
     header_text = extract_header_text(text_clean)
     detection_text = header_text or text_clean[:HEADER_MAX_CHARS]
-    
-    # 1. Exam Name
-    exam_name = "Not Found"
+        
+    if not gemini_success:
+        course_code = "Not Found"
+        fallback = re.search(r'Course\s*Cod[^a-zA-Z0-9]*\s*([a-zA-Z0-9OIl\+]{5,10})', detection_text, re.IGNORECASE)
+        if fallback:
+             course_code = fallback.group(1).upper()
+        else:
+             code_match = re.search(r'\b([A-Z]{3,4}\s*[0-9OIl\+]{3,4})\b', detection_text)
+             if code_match:
+                 course_code = code_match.group(1).upper()
+             else:
+                 fallback_before = re.search(r'\b([a-zA-Z0-9]{5,10})\s+(?:Programme|Course\s*Cod)', detection_text, re.IGNORECASE)
+                 if fallback_before:
+                     course_code = fallback_before.group(1).upper()
+
+        if course_code != "Not Found":
+            letters = re.sub(r'[^A-Z]', '', course_code[:3])
+            if len(course_code) > 3:
+                digits = course_code[3:].replace('O', '0').replace('I', '1').replace('l', '1').replace('S', '5').replace('+', '4')
+                course_code = letters + digits
+
+        course_title = "Not Found"
+        title_match = re.search(r'(?:Title|Name)\s+(.*?)\s+(?:Course|Cod[ec]|Dute|Date|Session|Slot|Max\.|CIA|Time|Programme|Answer|Hrs)', detection_text, re.IGNORECASE)
+        if title_match:
+            course_title = title_match.group(1).strip()
+        else:
+            title_match2 = re.search(r'Cod[^a-zA-Z0-9]*.*?(?:Title|Name)\s+(.*?)\s+(?:Dute|Date|Session|Slot|Max\.|CIA|Time|Answer|Hrs)', detection_text, re.IGNORECASE)
+            if title_match2:
+                 course_title = title_match2.group(1).strip()
+                 
+        course_code, course_title = get_course_details_from_csv(course_code, course_title, detection_text)
+                 
+        if course_code == "Not Found": course_code = ""
+        if course_title == "Not Found": course_title = ""
+        
+        if course_code and course_title:
+            course_combined = f"{course_code} - {course_title}"
+        elif course_code:
+            course_combined = course_code
+        elif course_title:
+            course_combined = course_title
+
+    # Exam Name Regex Verification (Required since prompt doesn't cover EXAM type)
     if re.search(r'MID\s*TERM|CAT\s*\d?', detection_text, re.IGNORECASE):
         exam_name = "Midterm"
     elif re.search(r'TERM\s*END|END\s*TERM|FAT', detection_text, re.IGNORECASE):
         exam_name = "Term End"
-        
-    # 2. Course Code Extraction
-    course_code = "Not Found"
-    fallback = re.search(r'Course\s*Cod[^a-zA-Z0-9]*\s*([a-zA-Z0-9OIl\+]{5,10})', detection_text, re.IGNORECASE)
-    if fallback:
-         course_code = fallback.group(1).upper()
-    else:
-         code_match = re.search(r'\b([A-Z]{3,4}\s*[0-9OIl\+]{3,4})\b', detection_text)
-         if code_match:
-             course_code = code_match.group(1).upper()
-         else:
-             fallback_before = re.search(r'\b([a-zA-Z0-9]{5,10})\s+(?:Programme|Course\s*Cod)', detection_text, re.IGNORECASE)
-             if fallback_before:
-                 course_code = fallback_before.group(1).upper()
-
-    if course_code != "Not Found":
-        letters = re.sub(r'[^A-Z]', '', course_code[:3])
-        if len(course_code) > 3:
-            digits = course_code[3:].replace('O', '0').replace('I', '1').replace('l', '1').replace('S', '5').replace('+', '4')
-            course_code = letters + digits
-
-    # 3. Course Title Regex Extraction
-    course_title = "Not Found"
-    title_match = re.search(r'(?:Title|Name)\s+(.*?)\s+(?:Course|Cod[ec]|Dute|Date|Session|Slot|Max\.|CIA|Time|Programme|Answer|Hrs)', detection_text, re.IGNORECASE)
-    if title_match:
-        course_title = title_match.group(1).strip()
-    else:
-        title_match2 = re.search(r'Cod[^a-zA-Z0-9]*.*?(?:Title|Name)\s+(.*?)\s+(?:Dute|Date|Session|Slot|Max\.|CIA|Time|Answer|Hrs)', detection_text, re.IGNORECASE)
-        if title_match2:
-             course_title = title_match2.group(1).strip()
-             
-    course_code, course_title = get_course_details_from_csv(course_code, course_title, detection_text)
-             
-    if course_code == "Not Found": course_code = ""
-    if course_title == "Not Found": course_title = ""
-    if exam_name == "Not Found": exam_name = ""
-    
-    course_combined = ""
-    if course_code and course_title:
-        course_combined = f"{course_code} - {course_title}"
-    elif course_code:
-        course_combined = course_code
-    elif course_title:
-        course_combined = course_title
 
     return jsonify({
         "course_combined": course_combined,
-        "exam_name": exam_name
+        "exam_name": exam_name,
+        "slot": extracted_slot,
+        "is_question_paper": is_question_paper,
+        "gemini_used": gemini_success,
+        "gemini_api_failed": gemini_api_failed,
+        "processed_text": text_raw
     })
 
 @app.route('/api/courses', methods=['GET'])

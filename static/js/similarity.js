@@ -92,6 +92,14 @@ export async function checkSimilarityWithDatabase(courseCombined, extractedText)
             }
         });
         
+        const uploadBtn = document.getElementById('btn-upload-final');
+        if (uploadBtn && uploadBtn.dataset.blockedByDuplicate === "true") {
+            uploadBtn.disabled = false;
+            uploadBtn.style.opacity = '1';
+            uploadBtn.style.cursor = 'pointer';
+            delete uploadBtn.dataset.blockedByDuplicate;
+        }
+
         if (maxSim > 50 && bestMatch) {
             const fileUrl = bestMatch.fileUrl || bestMatch.zipUrl || '';
             const explicitType = (bestMatch.fileType || '').toLowerCase();
@@ -100,22 +108,48 @@ export async function checkSimilarityWithDatabase(courseCombined, extractedText)
             const thumbUrl = bestMatch.thumbnailUrl || (isImage ? fileUrl : '');
             
             warningEl.className = 'dup-warning';
-            warningEl.innerHTML = `
-                <strong>⚠️ Possible Duplicate Detected (${maxSim.toFixed(1)}% similarity)</strong>
-                <p>A previously uploaded <em>${bestMatch.examName}</em> paper for this course appears to be similar. Do not upload duplicate paper</p>
-                ${ thumbUrl ? `
-                    <div class="dup-thumb-wrap" data-open-url="${fileUrl}">
-                        <img src="${thumbUrl}" alt="Similar paper">
-                        <span class="dup-thumb-label">View Full →</span>
-                    </div>` : isPdf && fileUrl ? `
-                    <div class="dup-thumb-wrap" data-open-url="${fileUrl}" style="display:flex;align-items:center;justify-content:center;background:#f7f7f7;">
-                        <div style="text-align:center;color:#666;display:flex;flex-direction:column;gap:6px;align-items:center;">
-                            <span class="material-symbols-outlined" style="font-size:2rem;color:#d32f2f;">picture_as_pdf</span>
-                            <span style="font-size:0.75rem;font-weight:600;">Open Similar PDF</span>
-                        </div>
-                        <span class="dup-thumb-label">View Full →</span>
-                    </div>` : fileUrl ? `<a href="${fileUrl}" target="_blank" class="dl-btn" style="display:inline-block;margin-top:0">View Archived Paper</a>` : '' }
-            `;
+            
+            if (maxSim >= 85) {
+                if (uploadBtn) {
+                    uploadBtn.disabled = true;
+                    uploadBtn.style.opacity = '0.5';
+                    uploadBtn.style.cursor = 'not-allowed';
+                    uploadBtn.dataset.blockedByDuplicate = "true";
+                }
+                warningEl.innerHTML = `
+                    <strong style="color: #d32f2f;">🚨 Upload Blocked: Exact Duplicate Detected (${maxSim.toFixed(1)}% similarity)</strong>
+                    <p style="color: #d32f2f; font-weight: bold;">This paper has already been uploaded previously. Uploads for identical papers are strictly prohibited.</p>
+                    ${ thumbUrl ? `
+                        <div class="dup-thumb-wrap" data-open-url="${fileUrl}">
+                            <img src="${thumbUrl}" alt="Similar paper">
+                            <span class="dup-thumb-label">View Full →</span>
+                        </div>` : isPdf && fileUrl ? `
+                        <div class="dup-thumb-wrap" data-open-url="${fileUrl}" style="display:flex;align-items:center;justify-content:center;background:#f7f7f7;">
+                            <div style="text-align:center;color:#666;display:flex;flex-direction:column;gap:6px;align-items:center;">
+                                <span class="material-symbols-outlined" style="font-size:2rem;color:#d32f2f;">picture_as_pdf</span>
+                                <span style="font-size:0.75rem;font-weight:600;">Open Similar PDF</span>
+                            </div>
+                            <span class="dup-thumb-label">View Full →</span>
+                        </div>` : fileUrl ? `<a href="${fileUrl}" target="_blank" class="dl-btn" style="display:inline-block;margin-top:0">View Archived Paper</a>` : '' }
+                `;
+            } else {
+                warningEl.innerHTML = `
+                    <strong>⚠️ Possible Duplicate Detected (${maxSim.toFixed(1)}% similarity)</strong>
+                    <p>A previously uploaded <em>${bestMatch.examName}</em> paper for this course appears to be similar. Do not upload duplicate paper</p>
+                    ${ thumbUrl ? `
+                        <div class="dup-thumb-wrap" data-open-url="${fileUrl}">
+                            <img src="${thumbUrl}" alt="Similar paper">
+                            <span class="dup-thumb-label">View Full →</span>
+                        </div>` : isPdf && fileUrl ? `
+                        <div class="dup-thumb-wrap" data-open-url="${fileUrl}" style="display:flex;align-items:center;justify-content:center;background:#f7f7f7;">
+                            <div style="text-align:center;color:#666;display:flex;flex-direction:column;gap:6px;align-items:center;">
+                                <span class="material-symbols-outlined" style="font-size:2rem;color:#d32f2f;">picture_as_pdf</span>
+                                <span style="font-size:0.75rem;font-weight:600;">Open Similar PDF</span>
+                            </div>
+                            <span class="dup-thumb-label">View Full →</span>
+                        </div>` : fileUrl ? `<a href="${fileUrl}" target="_blank" class="dl-btn" style="display:inline-block;margin-top:0">View Archived Paper</a>` : '' }
+                `;
+            }
 
             const previewEl = warningEl.querySelector('[data-open-url]');
             if (previewEl) {
@@ -124,5 +158,9 @@ export async function checkSimilarityWithDatabase(courseCombined, extractedText)
                 });
             }
         }
-    } catch (e) { console.error("Similarity Check Error", e); }
+        return { maxSim, bestMatch };
+    } catch (e) {
+        console.error("Similarity Check Error", e);
+        return { maxSim: 0, bestMatch: null };
+    }
 }

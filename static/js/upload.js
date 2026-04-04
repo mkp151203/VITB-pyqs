@@ -324,23 +324,39 @@ btnNextMetadata.addEventListener('click', async () => {
     const imageToScan = page1.displayDataUrl;
     
     try {
-        const { data: { text } } = await Tesseract.recognize(imageToScan, 'eng');
-        const cleanedText = sanitizeExtractedText(text);
-        page1.text = cleanedText;
-        
-        const parseRes = await fetch('/api/parse', {
+        let parseRes = await fetch('/api/parse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: cleanedText })
+            body: JSON.stringify({ text: "", image_base64: imageToScan })
         });
         
-        const structuredData = await parseRes.json();
+        let structuredData = await parseRes.json();
+        
+        if (structuredData.gemini_api_failed) {
+            const tempWel = document.getElementById('ocr-warning');
+            if (tempWel) {
+                 tempWel.innerText = "AI parser busy. Running local Tesseract OCR fallback...";
+                 tempWel.classList.remove('hidden');
+            }
+            const { data: { text } } = await Tesseract.recognize(imageToScan, 'eng');
+            const cleanedText = sanitizeExtractedText(text);
+            
+            parseRes = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: cleanedText, image_base64: "" })
+            });
+            structuredData = await parseRes.json();
+        }
+        
+        let textSource = structuredData.processed_text || "";
+        page1.text = textSource;
 
         const pendingRequest = getPendingRequestPrefill();
         renderPendingRequestNotice(pendingRequest);
         const selectedCourseFromDetection = pendingRequest?.courseCombined || structuredData.course_combined || '';
         const selectedExamFromDetection = pendingRequest?.examName || structuredData.exam_name || '';
-        const selectedSlotFromRequest = pendingRequest?.slot || '';
+        const selectedSlotFromRequest = pendingRequest?.slot || structuredData.slot || '';
         
         document.getElementById('course-title').value = selectedCourseFromDetection;
         if (document.getElementById('course-select-text')) {
@@ -350,19 +366,39 @@ btnNextMetadata.addEventListener('click', async () => {
         if (selectedSlotFromRequest && selectedSlotFromRequest !== 'NA' && document.getElementById('slot-info')) {
             document.getElementById('slot-info').value = selectedSlotFromRequest;
         }
-        document.getElementById('extracted-text-pg1').value = cleanedText;
+        document.getElementById('extracted-text-pg1').value = page1.text;
         
         const wEl = document.getElementById('ocr-warning');
-        if (selectedCourseFromDetection) {
-            wEl.classList.add('hidden');
-            checkSimilarityWithDatabase(selectedCourseFromDetection, cleanedText);
-            if (pendingRequest?.courseCombined) {
-                wEl.innerText = 'Prefilled from selected request. You can still change course/exam before upload.';
-                wEl.classList.remove('hidden');
+        const uploadBtn = document.getElementById('btn-upload-final');
+        
+        if (structuredData.is_question_paper === false) {
+            wEl.innerText = "Image is not a question paper. Upload blocked.";
+            wEl.classList.remove('hidden');
+            wEl.style.color = "red";
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+                uploadBtn.style.opacity = '0.5';
+                uploadBtn.style.cursor = 'not-allowed';
             }
         } else {
-            wEl.innerText = "course not detected please select a course. Please do not upload any image other than question paper";
-            wEl.classList.remove('hidden');
+            if (uploadBtn) {
+                uploadBtn.disabled = false;
+                uploadBtn.style.opacity = '1';
+                uploadBtn.style.cursor = 'pointer';
+            }
+            if (selectedCourseFromDetection) {
+                wEl.classList.add('hidden');
+                wEl.style.color = "";
+                checkSimilarityWithDatabase(selectedCourseFromDetection, textSource);
+                if (pendingRequest?.courseCombined) {
+                    wEl.innerText = 'Prefilled from selected request. You can still change course/exam before upload.';
+                    wEl.classList.remove('hidden');
+                }
+            } else {
+                wEl.innerText = "Course not detected please select a course. Please do not upload any image other than question paper";
+                wEl.classList.remove('hidden');
+                wEl.style.color = "";
+            }
         }
         
     } catch (e) {

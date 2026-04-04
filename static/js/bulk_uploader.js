@@ -382,22 +382,67 @@ btnProcessSelected.addEventListener('click', async () => {
         const first = currentBatch[0];
         reviewStatus.innerText = `Running OCR on first selected image: ${first.name}`;
 
-        const ocrResult = await Tesseract.recognize(first.previewUrl, 'eng');
-        currentDetectedText = sanitizeText(ocrResult?.data?.text || '');
+        currentDetectedText = "";
 
-        const parseRes = await fetch('/api/parse', {
+        const fileToDataUrl = (file) => new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+        const imageToScanBase64 = await fileToDataUrl(first.file);
+
+        let parseRes = await fetch('/api/parse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: currentDetectedText })
+            body: JSON.stringify({ text: "", image_base64: imageToScanBase64 })
         });
 
         if (!parseRes.ok) throw new Error('Course parse failed');
-        const parsed = await parseRes.json();
+        let parsed = await parseRes.json();
+        
+        if (parsed.gemini_api_failed) {
+            reviewStatus.innerText = `AI timeout. Running local Tesseract OCR fallback on: ${first.name}`;
+            const ocrResult = await Tesseract.recognize(first.previewUrl, 'eng');
+            currentDetectedText = sanitizeText(ocrResult?.data?.text || '');
+            
+            parseRes = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: currentDetectedText, image_base64: "" })
+            });
+            if (!parseRes.ok) throw new Error('Fallback course parse failed');
+            parsed = await parseRes.json();
+        }
+        
+        if (parsed.is_question_paper === false) {
+            showMsg('Error: Image is not a question paper. Upload blocked.', 'error');
+            reviewStatus.innerText = 'Image is not a valid question paper. Process aborted.';
+            return;
+        }
+
+        if (parsed.processed_text) {
+            currentDetectedText = parsed.processed_text;
+        }
 
         reviewCourse.value = parsed.course_combined || '';
         reviewExam.value = parsed.exam_name || '';
+        if (parsed.slot && reviewSlot) {
+            reviewSlot.value = parsed.slot;
+        }
+        
         if (reviewCourse.value && currentDetectedText) {
-            await checkSimilarityWithDatabase(reviewCourse.value, currentDetectedText);
+            const simResult = await checkSimilarityWithDatabase(reviewCourse.value, currentDetectedText);
+            if (simResult && simResult.maxSim >= 85) {
+                btnUploadBatch.disabled = true;
+                btnUploadBatch.style.opacity = '0.5';
+                btnUploadBatch.style.cursor = 'not-allowed';
+                reviewStatus.innerText = 'Exact duplicate detected. Upload blocked.';
+                showMsg('Exact duplicate detected. Upload blocked.', 'error');
+            } else {
+                btnUploadBatch.disabled = false;
+                btnUploadBatch.style.opacity = '1';
+                btnUploadBatch.style.cursor = 'pointer';
+            }
         }
         reviewStatus.innerText = 'Review detected course/exam and upload batch.';
         reviewForm.classList.remove('hidden');
@@ -420,7 +465,16 @@ reviewCourse.addEventListener('change', async () => {
         hideDuplicateWarning();
         return;
     }
-    await checkSimilarityWithDatabase(course, currentDetectedText);
+    const simResult = await checkSimilarityWithDatabase(course, currentDetectedText);
+    if (simResult && simResult.maxSim >= 85) {
+        btnUploadBatch.disabled = true;
+        btnUploadBatch.style.opacity = '0.5';
+        btnUploadBatch.style.cursor = 'not-allowed';
+    } else {
+        btnUploadBatch.disabled = false;
+        btnUploadBatch.style.opacity = '1';
+        btnUploadBatch.style.cursor = 'pointer';
+    }
 });
 
 async function buildPdfFromBatch(batch) {
