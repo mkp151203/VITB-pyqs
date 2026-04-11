@@ -1,6 +1,6 @@
-// search.js — 3-level search navigation (subjects → exam types → papers)
 import { db, collection, getDocs } from './firebase.js';
 import { loadCourseCatalog } from './courses.js';
+import { openCollectionModal } from './account.js';
 
 let searchArchives = [];
 let groupedBySubject = {};
@@ -503,17 +503,25 @@ function renderPapersList(papers) {
                 <p style="margin:8px 0 0; color:#777; font-size:0.82rem;">Slot: <strong>${getNormalizedSlot(p)}</strong></p>
                 ${previewHtml}
             </div>
-            <div class="paper-actions">
-                <a href="${fileUrl}" target="_blank" class="btn-dl">
+            <div class="paper-actions" style="display:flex; gap:8px;">
+                <a href="${fileUrl}" target="_blank" class="btn-dl" style="flex:2; text-align:center;">
                     <span class="material-symbols-outlined" style="font-size:1rem;">download</span>
                     ${isPdf ? 'Download PDF' : 'Open Image'}
                 </a>
-                <button class="btn-report">
+                <button class="btn-save-collection" style="flex:0 0 auto; padding: 6px 12px; background: #222; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Save to Collection">
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem;">bookmark</span>
+                </button>
+                <button class="btn-report" style="flex:1;">
                     Report
                 </button>
             </div>
         `;
         grid.appendChild(div);
+
+        const saveBtn = div.querySelector('.btn-save-collection');
+        saveBtn?.addEventListener('click', () => {
+            openCollectionModal(p);
+        });
 
         const reportBtn = div.querySelector('.btn-report');
         reportBtn?.addEventListener('click', () => {

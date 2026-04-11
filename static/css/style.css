@@ -812,3 +812,73 @@ textarea { resize: vertical; }
 @media screen and (max-width: 768px) {
     input, select, textarea { font-size: 16px !important; }
 }
+
+/* ---- Tab bar: scrollable on small screens ---- */
+@media (max-width: 520px) {
+    .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+        gap: 0;
+        /* push border under to avoid double border */
+        border-bottom: 2px solid var(--border-color);
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+        flex: 1 0 auto;          /* don't shrink below content */
+        flex-direction: column;  /* icon on top, label below */
+        align-items: center;
+        gap: 2px;
+        padding: 8px 10px;
+        font-size: 0.7rem;
+        white-space: nowrap;
+    }
+
+    .tab-icon {
+        font-size: 1.3rem;       /* larger icon to compensate smaller text */
+    }
+}
+
+/* ---- Account dashboard: mobile friendly ---- */
+@media (max-width: 520px) {
+    /* Header row: stack avatar+name block and logout button better */
+    .account-header {
+        flex-wrap: wrap !important;
+        gap: 12px !important;
+    }
+
+    /* Avatar + name takes full width, logout sits below */
+    .account-header > div:first-child {
+        flex: 1 1 100%;
+    }
+    .account-header > button {
+        align-self: flex-start;
+    }
+
+    /* My Collections / My Uploads toggle row */
+    #btn-show-collections,
+    #btn-show-uploads {
+        font-size: 0.85rem;
+        padding: 10px 8px;
+    }
+
+    /* Collection card action row */
+    #collection-details-container > div:first-child {
+        flex-wrap: wrap;
+        gap: 6px !important;
+    }
+
+    /* Anonymous checkbox label wrapping */
+    #checkbox-anonymous + label {
+        font-size: 0.8rem;
+    }
+
+    /* Uploads grid: single column on very small screens */
+    #uploads-list,
+    #collections-list,
+    #collection-papers-list {
+        grid-template-columns: 1fr !important;
+    }
+}
+

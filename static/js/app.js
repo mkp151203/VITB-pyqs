@@ -5,6 +5,9 @@ import { init as initUpload, getPagesArray } from './upload.js';
 import { loadAllSearchablePapers, restoreSearchStateFromHistory } from './search.js';
 import { initFeedback } from './feedback.js';
 import { initRequests } from './requests.js';
+import { loginWithGoogle } from './auth.js';
+import { initAccount, refreshAccountView } from './account.js';
+import { initLeaderboard } from './leaderboard.js';
 
 // === View State Machine ===
 const views = {
@@ -13,7 +16,9 @@ const views = {
     "crop": document.getElementById('crop-view'),
     "metadata": document.getElementById('metadata-view'),
     "processing": document.getElementById('processing-view'),
-    "search": document.getElementById('search-view')
+    "search": document.getElementById('search-view'),
+    "account": document.getElementById('account-view'),
+    "leaderboard": document.getElementById('leaderboard-view')
 };
 
 function showView(viewId) {
@@ -24,20 +29,40 @@ function showView(viewId) {
 function setActiveTab(tab) {
     const uploadTab = document.getElementById('tab-upload');
     const searchTab = document.getElementById('tab-search');
-    const isSearch = tab === 'search';
-    searchTab?.classList.toggle('active', isSearch);
-    uploadTab?.classList.toggle('active', !isSearch);
+    const authTab = document.getElementById('tab-auth');
+    const leaderboardTab = document.getElementById('tab-leaderboard');
+    
+    uploadTab?.classList.toggle('active', tab === 'upload');
+    searchTab?.classList.toggle('active', tab === 'search');
+    authTab?.classList.toggle('active', tab === 'account');
+    leaderboardTab?.classList.toggle('active', tab === 'leaderboard');
 }
 
 function openUploadTab() {
     setActiveTab('upload');
-    showView(getPagesArray().length > 0 ? 'arrange' : 'upload');
+    showView('upload');
+    sessionStorage.setItem('activeTab', 'upload');
 }
 
 function openSearchTab(initialFilter = '') {
     setActiveTab('search');
     showView('search');
+    sessionStorage.setItem('activeTab', 'search');
     loadAllSearchablePapers(initialFilter);
+}
+
+function openAccountTab() {
+    setActiveTab('account');
+    showView('account');
+    sessionStorage.setItem('activeTab', 'account');
+    refreshAccountView();
+}
+
+function openLeaderboardTab() {
+    setActiveTab('leaderboard');
+    showView('leaderboard');
+    sessionStorage.setItem('activeTab', 'leaderboard');
+    initLeaderboard();
 }
 
 function pushTabState(tab, extra = {}) {
@@ -55,6 +80,7 @@ initUpload(showView);
 fetchCourses();
 initFeedback();
 initRequests();
+initAccount();
 
 document.getElementById('opencv-status').innerText = 'Ready to adjust corners.';
 
@@ -71,17 +97,57 @@ document.getElementById('tab-search').addEventListener('click', (e) => {
     pushTabState('search', { searchLevel: 'subject' });
 });
 
+document.getElementById('tab-auth')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openAccountTab();
+    pushTabState('account');
+});
+
+document.getElementById('tab-leaderboard')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openLeaderboardTab();
+    pushTabState('leaderboard');
+});
+
+document.getElementById('btn-login-main')?.addEventListener('click', async () => {
+    try {
+        await loginWithGoogle();
+    } catch (e) {
+        console.warn("Login flow exception", e);
+        const el = document.getElementById('global-message');
+        if (el) {
+            el.innerText = e.message || 'Login failed';
+            el.className = 'error';
+            setTimeout(() => el.innerText='', 4000);
+        }
+    }
+});
+
 const initialQuery = new URLSearchParams(window.location.search).get('q');
 if (initialQuery && initialQuery.trim()) {
     const query = initialQuery.trim();
-    openSearchTab(query);
-    replaceTabState('search', { q: query, searchLevel: 'subject', filter: query });
+    openSearchTab();
+    document.getElementById('search-input').value = query;
+    // this timeout handles the lazy-loading of courses array.
+    setTimeout(() => {
+        window.dispatchEvent(new Event('load-search'));
+    }, 500);
 } else {
-    openUploadTab();
-    replaceTabState('upload');
+    // Restore tab from Session Storage
+    const activeTab = sessionStorage.getItem('activeTab');
+    if (activeTab === 'account') {
+        openAccountTab();
+    } else if (activeTab === 'search') {
+        openSearchTab();
+    } else if (activeTab === 'leaderboard') {
+        openLeaderboardTab();
+    } else {
+        openUploadTab();
+    }
 }
 
-window.addEventListener('popstate', (event) => {
+// History API popstate handler (used for Search deep links)
+window.addEventListener('popstate', (e) => {
     const state = event.state;
     if (!state || !state.appNav) return;
 
@@ -93,6 +159,16 @@ window.addEventListener('popstate', (event) => {
             return;
         }
         openSearchTab(state.q || '');
+        return;
+    }
+
+    if (state.tab === 'account') {
+        openAccountTab();
+        return;
+    }
+
+    if (state.tab === 'leaderboard') {
+        openLeaderboardTab();
         return;
     }
 

@@ -85,6 +85,14 @@
                     <span class="material-symbols-outlined tab-icon">search</span>
                     Search Papers
                 </button>
+                <button id="tab-leaderboard" class="tab-btn">
+                    <span class="material-symbols-outlined tab-icon">social_leaderboard</span>
+                    Leaderboard
+                </button>
+                <button id="tab-auth" class="tab-btn">
+                    <span class="material-symbols-outlined tab-icon" id="auth-icon">login</span>
+                    <span id="auth-text" style="display:inline-block;">Account</span>
+                </button>
             </div>
         </header>
 
@@ -92,7 +100,7 @@
             <!-- Rate limit banner -->
             <div id="rate-limit-banner" class="hidden rate-limit-banner">
                 <span class="material-symbols-outlined">warning</span>
-                <span>Daily upload limit reached (20/day). Come back tomorrow!</span>
+                <span>Daily upload limit reached (5/day for guests). Sign in to upload up to 50/day!</span>
             </div>
 
             <!-- 1. UPLOAD VIEW -->
@@ -112,6 +120,18 @@
                     <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" />
                     <input type="file" id="file-input-multi" accept="image/*" multiple class="hidden" />
                 </div>
+                <div id="auth-features-note" class="feature-note" style="background: #e1f5fe; border-color: #b3e5fc;">
+                    <h3 style="color: #0277bd;">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-2px;">verified_user</span>
+                        Why sign in? (VIT Students only)
+                    </h3>
+                    <ul style="color: #01579b;">
+                        <li><strong>Increased Limits:</strong> Upload up to 50 papers daily (Guests: 5).</li>
+                        <li><strong>Personal Collections:</strong> Save and organize papers into custom folders.</li>
+                        <li><strong>Manage Uploads:</strong> View and delete your contributed papers anytime.</li>
+                        <li><strong>Leaderboard:</strong> Compete with others and become a top contributor.</li>
+                    </ul>
+                </div>
                 <div class="feature-note">
                     <h3>
                         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-2px;">search</span>
@@ -125,6 +145,8 @@
                         <li>Step 4: Upload to archive.</li>
                     </ul>
                 </div>
+
+                
 
                 <div id="pending-request-notice" class="hidden" style="margin-top:10px;">
                     <button id="btn-cancel-request-flow" type="button" class="btn btn-secondary btn-sm" style="width:auto;display:inline-flex;gap:8px;align-items:center;">
@@ -231,7 +253,7 @@
                             </div>
                             <ul id="course-options-list" class="custom-options-list"></ul>
                         </div>
-                        <input type="hidden" id="course-title" name="course_title" required>
+                        <input type="hidden" id="course-title" name="course_title">
                     </div>
 
                     <div id="custom-course-fields" class="hidden">
@@ -256,8 +278,8 @@
                             <span class="material-symbols-outlined label-icon">event</span>
                             Exam Type
                         </label>
-                        <select id="exam-name" name="exam_name" required>
-                            <option value="" disabled selected>Select Exam</option>
+                        <select id="exam-name" name="exam_name">
+                            <option value="">Select Exam</option>
                             <option value="Midterm">Mid-term Exam</option>
                             <option value="Term End">Term-End Exam</option>
                         </select>
@@ -317,6 +339,116 @@
                 </div>
                 
                 <div id="search-results" class="results-grid"></div>
+            </div>
+
+            <!-- ACCOUNT VIEW -->
+            <div id="account-view" class="hidden">
+                <div id="account-unauthenticated" class="text-center" style="padding: 40px 20px;">
+                    <span class="material-symbols-outlined" style="font-size: 48px; color: #ccc; margin-bottom: 16px;">account_circle</span>
+                    <h3>Sign in Required</h3>
+                    <p style="color: #666; margin-bottom: 24px;">Please sign in with VIT email to view your uploads and collections.</p>
+                    <button id="btn-login-main" class="btn btn-primary" style="margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.2 1.13-.85 2.1-1.84 2.76v2.3h2.98C16.7 14.3 17.64 11.94 17.64 9.2z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.98-2.3c-.8.54-1.83.86-2.98.86-2.3 0-4.24-1.55-4.94-3.64H1.02v2.38C2.5 16.03 5.48 18 9 18z"/><path fill="#FBBC05" d="M4.06 10.74c-.18-.54-.28-1.12-.28-1.74s.1-1.2.28-1.74V4.88H1.02C.37 6.18 0 7.54 0 9s.37 2.82 1.02 4.12l3.04-2.38z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.34l2.58-2.58C13.46.88 11.42 0 9 0 5.48 0 2.5 1.97 1.02 4.88l3.04 2.38C4.76 5.13 6.7 3.58 9 3.58z"/></svg>
+                        Sign in with Google
+                    </button>
+                    <div style="margin-top: 30px; text-align: left; background: var(--secondary); padding: 20px; border-radius: 12px;">
+                        <h4 style="margin: 0 0 12px; color: var(--primary);">Unlock Pro Features:</h4>
+                        <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; color: var(--text-color);">
+                            <li><strong>Limit Upgrade:</strong> Upload 50 papers/day.</li>
+                            <li><strong>Collections:</strong> Save papers to custom folders.</li>
+                            <li><strong>Management:</strong> View & delete your uploads.</li>
+                            <li><strong>Leaderboard:</strong> Show off your ranking.</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div id="account-authenticated" class="hidden">
+                    <div class="account-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #eee;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <img id="account-avatar" src="" alt="Avatar" style="width: 48px; height: 48px; border-radius: 50%; background: #eee;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <h3 id="account-name" style="margin: 0;">User Name</h3>
+                                    <button id="btn-edit-username" class="btn btn-secondary btn-sm" style="padding: 2px 6px; background: transparent; border: none;"><span class="material-symbols-outlined" style="font-size: 1rem;">edit</span></button>
+                                </div>
+                                <div id="edit-username-container" class="hidden" style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                    <input id="input-edit-username" type="text" maxlength="20" style="margin:0; padding:4px 6px; font-size:0.9rem;" placeholder="New username">
+                                    <button id="btn-save-username" class="btn btn-primary btn-sm" style="padding: 4px 8px;">Save</button>
+                                    <button id="btn-cancel-username" class="btn btn-secondary btn-sm" style="padding: 4px 8px;">Cancel</button>
+                                </div>
+                                <p id="account-email" style="margin: 4px 0 0; color: #666; font-size: 0.9rem;">user@example.com</p>
+                                <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                                    <input type="checkbox" id="checkbox-anonymous" style="margin:0; width:16px; height:16px; cursor:pointer;" title="Hide profile on Leaderboard">
+                                    <label for="checkbox-anonymous" style="margin:0; font-size:0.85rem; color:#666; cursor:pointer; user-select:none;">Stay Anonymous on Leaderboard</label>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="btn-logout" class="btn btn-secondary btn-sm">Log out</button>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                        <button id="btn-show-collections" class="btn btn-primary" style="flex:1;">My Collections</button>
+                        <button id="btn-show-uploads" class="btn btn-secondary" style="flex:1;">My Uploads</button>
+                    </div>
+
+                    <!-- Collections Sub-view -->
+                    <div id="collections-container">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3 style="margin: 0;">My Collections</h3>
+                            <div style="display: flex; gap: 8px;">
+                                
+                                <button id="btn-create-collection" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 4px;">
+                                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">add</span> New
+                                </button>
+                            </div>
+                        </div>
+                        <div id="collections-list" class="results-grid"></div>
+                    </div>
+
+                    <!-- Uploads Sub-view -->
+                    <div id="uploads-container" class="hidden">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3 style="margin: 0;">My Uploads</h3>
+                            <button id="btn-account-upload" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" style="font-size: 1.1rem;">upload</span> Upload Paper
+                            </button>
+                        </div>
+                        <div id="uploads-list" class="results-grid"></div>
+                    </div>
+                    
+                    <!-- Inside Collection Sub-view -->
+                    <div id="collection-details-container" class="hidden">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                            <button id="btn-back-collections" class="btn btn-secondary btn-sm" style="padding: 4px;">
+                                <span class="material-symbols-outlined" style="font-size: 1.2rem;">arrow_back</span>
+                            </button>
+                            <h3 id="current-collection-name" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">Collection</h3>
+                            
+                            <button id="btn-search-from-collection" class="btn btn-primary btn-sm" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" style="font-size: 1.1rem;">search</span> Add Papers
+                            </button>
+                            
+                            <button id="btn-delete-collection" class="btn btn-sm" style="margin-left: 8px; background: var(--danger-bg); color: var(--danger); border: 1.5px solid var(--danger-border); display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">delete</span> Delete
+                            </button>
+                        </div>
+                        <!-- We re-use paper-card css for papers in here -->
+                        <div id="collection-papers-list" class="results-grid"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LEADERBOARD VIEW -->
+            <div id="leaderboard-view" class="hidden">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <span class="material-symbols-outlined" style="font-size: 3rem; color: #f59e0b;">emoji_events</span>
+                    <h2 style="margin: 8px 0 4px;">Top Contributors</h2>
+                    <p style="color: var(--text-muted); margin: 0; font-size: 0.9rem;">Thank you to the users who power this community!</p>
+                </div>
+                
+                <div id="leaderboard-list" style="display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto;">
+                    <div style="text-align: center; color: #888; padding: 40px;">Loading ranks...</div>
+                </div>
             </div>
 
             <div id="global-message"></div>
@@ -416,6 +548,27 @@
             <div id="fulfilled-requests-list" class="results-grid requests-list-scroll"></div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-close-modal="fulfilled" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collection Modal -->
+    <div id="save-collection-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Save to Collection</h3>
+                <button class="modal-close" data-close-modal="collection" type="button">×</button>
+            </div>
+            <p class="modal-desc">Choose a collection to save this paper to, or create a new one.</p>
+            <div id="save-collection-list" style="margin-bottom: 16px; max-height: 200px; overflow-y: auto;">
+                <div style="text-align: center; color: #888;">Loading collections...</div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px; align-items: stretch;">
+                <input id="new-collection-name" type="text" maxlength="30" placeholder="New collection name" style="flex: 1; margin-bottom: 0; min-width: 0;">
+                <button id="btn-quick-create-collection" class="btn btn-secondary" style="width: auto; white-space: nowrap;" type="button">Create</button>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-close-modal="collection" type="button">Close</button>
             </div>
         </div>
     </div>

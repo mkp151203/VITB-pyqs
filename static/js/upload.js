@@ -1,10 +1,11 @@
 // upload.js — File handling, arrange grid, OCR metadata, PDF generation & Firebase upload
-import { db, storage, collection, addDoc, doc, setDoc, updateDoc, serverTimestamp, ref, uploadBytes, getDownloadURL } from './firebase.js';
+import { db, storage, collection, addDoc, doc, setDoc, updateDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, increment } from './firebase.js';
 import { checkSimilarityWithDatabase } from './similarity.js';
 import { openCropView, init as initCrop } from './crop.js';
+import { getCurrentUser, onAuthChange } from './auth.js';
 
 // === Daily rate limiting (no login needed, localStorage-based) ===
-const RATE_LIMIT = 20;
+const RATE_LIMIT = 5;
 const RATE_KEY = 'pyq_upload_count';
 const RATE_DATE_KEY = 'pyq_upload_date';
 const SHOW_EXTRACTED_TEXT_PREVIEW = true;
@@ -33,11 +34,24 @@ function incrementUploadCount() {
 }
 
 function checkRateLimit() {
+    const user = getCurrentUser();
+    const limit = user ? 50 : RATE_LIMIT;
     const count = getUploadCount();
     const banner = document.getElementById('rate-limit-banner');
     const btn = document.getElementById('btn-upload-final');
-    if (count >= RATE_LIMIT) {
-        banner?.classList.remove('hidden');
+    
+    // Toggle the "Why sign in?" features note based on auth
+    const authNote = document.getElementById('auth-features-note');
+    if (authNote) {
+        if (user) authNote.classList.add('hidden');
+        else authNote.classList.remove('hidden');
+    }
+
+    if (count >= limit) {
+        if (banner) {
+            banner.innerHTML = `<span class="material-symbols-outlined">warning</span><span>Daily upload limit reached (${limit}/day). ${user ? '' : 'Sign in to upload up to 50/day!'}</span>`;
+            banner.classList.remove('hidden');
+        }
         if (btn) btn.disabled = true;
         return false;
     }
@@ -46,8 +60,9 @@ function checkRateLimit() {
     return true;
 }
 
-// Run rate limit check on load
+// Run rate limit check on load & auth change
 checkRateLimit();
+onAuthChange(() => checkRateLimit());
 
 // State
 let pagesArray = [];
@@ -453,7 +468,9 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
     
     // Rate limit guard
     if (!checkRateLimit()) {
-        showMsg(`Daily upload limit of ${RATE_LIMIT} reached. Try again tomorrow.`, "error");
+        const user = getCurrentUser();
+        const limit = user ? 50 : 20;
+        showMsg(`Daily upload limit of ${limit} reached. Try again tomorrow.`, "error");
         return;
     }
     
@@ -589,6 +606,8 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         pStatus.innerText = `Finalizing Database...`;
         pBar.style.width = '95%';
         
+        const currentUser = getCurrentUser();
+
         const uploadedPaperRef = await addDoc(collection(db, "question_papers_multi"), {
             courseTitle: courseCombined,
             courseCode: courseCode,
@@ -598,6 +617,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             pageCount: total,
             fileType: fileType,
             fileUrl: downloadUrl,
+            uploadedBy: currentUser ? currentUser.uid : null,
             createdAt: new Date().toISOString()
         });
 
@@ -629,6 +649,18 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             }
         }
 
+        if (currentUser) {
+            try {
+                const userDocRef = doc(db, 'user_profiles', currentUser.uid);
+                await setDoc(userDocRef, { 
+                    uploadCount: increment(1),
+                    lastActive: new Date().toISOString()
+                }, { merge: true });
+            } catch (e) {
+                console.warn('Failed to increment user metrics:', e);
+            }
+        }
+
         localStorage.removeItem(PENDING_REQUEST_KEY);
         renderPendingRequestNotice(null);
         
@@ -637,7 +669,8 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         
         pBar.style.width = '100%';
         pTitle.innerText = "Uploaded!";
-        pStatus.innerText = `Archived successfully! (${uploadsToday}/${RATE_LIMIT} uploads today)`;
+        const limit = currentUser ? 50 : 20;
+        pStatus.innerText = `Archived successfully! (${uploadsToday}/${limit} uploads today)`;
         
         setTimeout(() => {
             pagesArray = [];
