@@ -50,9 +50,9 @@ export function initAccount() {
     });
 
     document.getElementById('btn-create-collection')?.addEventListener('click', async () => {
-        let name = prompt('Enter a name for the new collection (max 30 chars):');
+        let name = prompt('Enter a name for the new collection (e.g. winter semester 2026 term-end):');
         if (name && name.trim()) {
-            name = name.trim().slice(0, 30);
+            name = name.trim().slice(0, 50);
             await createCollection(name);
             loadMyCollections();
         }

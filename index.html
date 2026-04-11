@@ -67,6 +67,27 @@
         </script>
 </head>
 <body>
+    <!-- Preloader -->
+    <div id="website-preloader">
+        <div class="preloader-content">
+            <img src="/static/logo.png" alt="VITB PYQs Logo" class="preloader-logo">
+            <h2 style="color: var(--primary); margin-top: 15px; font-size: 1.2rem; font-weight: 700;">VIT Bhopal PYQs</h2>
+            <div class="preloader-spinner"></div>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 10px;">Loading...</p>
+        </div>
+    </div>
+    <script>
+        // Remove preloader once fully loaded
+        window.addEventListener('load', () => {
+            const preloader = document.getElementById('website-preloader');
+            if (preloader) {
+                preloader.classList.add('fade-out');
+                setTimeout(() => {
+                    preloader.remove();
+                }, 400); // Wait for transition to complete
+            }
+        });
+    </script>
     <div class="container">
         <header>
             <div class="brand">
@@ -105,11 +126,17 @@
 
             <!-- 1. UPLOAD VIEW -->
             <div id="upload-view">
+   
                 <p class="section-desc">
                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">info</span>
                     Capture or upload multiple pages of a question paper to scan &amp; archive.
                 </p>
-                
+                <div id="pending-request-notice" class="hidden" style="margin-top:10px;margin-bottom:20px;">
+                    <button id="btn-cancel-request-flow" type="button" class="btn btn-secondary btn-sm" style="width:auto;display:inline-flex;gap:8px;align-items:center;">
+                        <span id="pending-request-text" style = "color: red;">Uploading for request</span>
+                        <span style="font-weight:700;line-height:1;">×</span>
+                    </button>
+                </div>
                 <div class="upload-section upload-actions">
                     <button class="btn btn-primary" id="btn-camera">
                         <span class="material-symbols-outlined btn-icon">photo_camera</span>Take Photo
@@ -132,6 +159,20 @@
                         <li><strong>Leaderboard:</strong> Compete with others and become a top contributor.</li>
                     </ul>
                 </div>
+                <div class="actions-row" style="margin-top: 10px;">
+                    <button id="btn-open-request" class="btn btn-secondary btn-flex-1" type="button">
+                        <span class="material-symbols-outlined btn-icon">campaign</span>
+                        Request Paper
+                    </button>
+                    <button id="btn-open-help" class="btn btn-primary btn-flex-1" type="button">
+                        <span class="material-symbols-outlined btn-icon">volunteer_activism</span>
+                        Help Others
+                    </button>
+                    <button id="btn-open-fulfilled" class="btn btn-secondary btn-flex-1" type="button">
+                        <span class="material-symbols-outlined btn-icon">task_alt</span>
+                        Fulfilled Requests
+                    </button>
+                </div>
                 <div class="feature-note">
                     <h3>
                         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-2px;">search</span>
@@ -148,27 +189,9 @@
 
                 
 
-                <div id="pending-request-notice" class="hidden" style="margin-top:10px;">
-                    <button id="btn-cancel-request-flow" type="button" class="btn btn-secondary btn-sm" style="width:auto;display:inline-flex;gap:8px;align-items:center;">
-                        <span id="pending-request-text">Uploading for request</span>
-                        <span style="font-weight:700;line-height:1;">×</span>
-                    </button>
-                </div>
+                
 
-                <div class="actions-row" style="margin-top: 10px;">
-                    <button id="btn-open-request" class="btn btn-secondary btn-flex-1" type="button">
-                        <span class="material-symbols-outlined btn-icon">campaign</span>
-                        Request Paper
-                    </button>
-                    <button id="btn-open-help" class="btn btn-primary btn-flex-1" type="button">
-                        <span class="material-symbols-outlined btn-icon">volunteer_activism</span>
-                        Help Others
-                    </button>
-                    <button id="btn-open-fulfilled" class="btn btn-secondary btn-flex-1" type="button">
-                        <span class="material-symbols-outlined btn-icon">task_alt</span>
-                        Fulfilled Requests
-                    </button>
-                </div>
+                
             </div>
 
             <!-- 2. ARRANGE VIEW -->
@@ -564,7 +587,7 @@
                 <div style="text-align: center; color: #888;">Loading collections...</div>
             </div>
             <div style="display: flex; gap: 8px; margin-bottom: 16px; align-items: stretch;">
-                <input id="new-collection-name" type="text" maxlength="30" placeholder="New collection name" style="flex: 1; margin-bottom: 0; min-width: 0;">
+                <input id="new-collection-name" type="text" maxlength="50" placeholder="collection name(e.g. winter semester)" style="flex: 1; margin-bottom: 0; min-width: 0;">
                 <button id="btn-quick-create-collection" class="btn btn-secondary" style="width: auto; white-space: nowrap;" type="button">Create</button>
             </div>
             <div class="modal-actions">

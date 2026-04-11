@@ -507,7 +507,7 @@ Rules:
 - Do NOT include any explanation
 - Return only valid JSON
 - give response question paper as "yes" only if it is a valid university exam question paper else give "no" as response
-- extracted text field should only contain lowercase text with no spaces
+- extracted text field should only contain lowercase text with no spaces and no newline characters
 - For 'extracted text', limit your transcription to ONLY the very first 650 characters of the document. Do not transcribe the entire page in order to save tokens!
 """
             from google.genai import types

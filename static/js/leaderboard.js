@@ -50,7 +50,7 @@ export async function initLeaderboard() {
 
             card.innerHTML = `
                 <div style="${rankStyle}">#${rank}</div>
-                <img src="${photoURL || '/static/logo.png'}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #eee;">
+                <img src="${photoURL || '/static/logo.png'}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; border: 2px solid #eee;">
                 <div style="flex: 1; min-width:0; text-align: left;">
                     <h3 style="margin: 0; font-size: 1.05rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                         ${displayName || 'Anonymous User'}

@@ -11,6 +11,10 @@ const RATE_DATE_KEY = 'pyq_upload_date';
 const SHOW_EXTRACTED_TEXT_PREVIEW = true;
 const PENDING_REQUEST_KEY = 'pyq_pending_request';
 
+const GEMINI_LIMIT = 60;
+const GEMINI_KEY = 'pyq_gemini_count';
+const GEMINI_DATE_KEY = 'pyq_gemini_date';
+
 function getTodayStr() {
     return new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
 }
@@ -30,6 +34,23 @@ function incrementUploadCount() {
     const count = getUploadCount() + 1;
     localStorage.setItem(RATE_KEY, String(count));
     localStorage.setItem(RATE_DATE_KEY, getTodayStr());
+    return count;
+}
+
+function getGeminiCount() {
+    const storedDate = localStorage.getItem(GEMINI_DATE_KEY);
+    if (storedDate !== getTodayStr()) {
+        localStorage.setItem(GEMINI_DATE_KEY, getTodayStr());
+        localStorage.setItem(GEMINI_KEY, '0');
+        return 0;
+    }
+    return parseInt(localStorage.getItem(GEMINI_KEY) || '0', 10);
+}
+
+function incrementGeminiCount() {
+    const count = getGeminiCount() + 1;
+    localStorage.setItem(GEMINI_KEY, String(count));
+    localStorage.setItem(GEMINI_DATE_KEY, getTodayStr());
     return count;
 }
 
@@ -188,10 +209,25 @@ async function handleFiles(files, fromCamera=false) {
     setButtonLoading(secondaryBtn, true, fromCamera ? 'Processing...' : 'Uploading...');
     
     try {
+        const validFiles = files.filter(f => f.type.startsWith('image/'));
+        if (validFiles.length !== files.length) {
+            alert("Only image files are allowed. Unsupported files were ignored.");
+        }
+        files = validFiles;
+        if (!files.length) {
+            setButtonLoading(primaryBtn, false);
+            setButtonLoading(secondaryBtn, false);
+            return;
+        }
+
         if (pagesArray.length + files.length > 10) {
             alert("Maximum limit of 10 pages allowed per document. Only the first 10 pages will be kept.");
             files = files.slice(0, Math.max(0, 10 - pagesArray.length));
-            if (files.length === 0) return;
+            if (files.length === 0) {
+                setButtonLoading(primaryBtn, false);
+                setButtonLoading(secondaryBtn, false);
+                return;
+            }
         }
         
         let lastAddedId = null;
@@ -339,24 +375,46 @@ btnNextMetadata.addEventListener('click', async () => {
     const imageToScan = page1.displayDataUrl;
     
     try {
-        let parseRes = await fetch('/api/parse', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: "", image_base64: imageToScan })
-        });
+        let structuredData;
+        const geminiCount = getGeminiCount();
         
-        let structuredData = await parseRes.json();
+        if (geminiCount < GEMINI_LIMIT) {
+            let parseRes = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: "", image_base64: imageToScan })
+            });
+            structuredData = await parseRes.json();
+            
+            if (!structuredData.gemini_api_failed) {
+                incrementGeminiCount();
+            }
+        } else {
+            // Force fallback if daily limit reached
+            structuredData = { gemini_api_failed: true, limit_reached: true };
+        }
         
         if (structuredData.gemini_api_failed) {
             const tempWel = document.getElementById('ocr-warning');
             if (tempWel) {
-                 tempWel.innerText = "AI parser busy. Running local Tesseract OCR fallback...";
+                 if (structuredData.limit_reached) {
+                     tempWel.innerText = `Daily AI analysis limit reached (${GEMINI_LIMIT}/day). Running offline fallback OCR...`;
+                 } else {
+                     tempWel.innerText = "AI parser busy. Running local Tesseract OCR fallback...";
+                 }
                  tempWel.classList.remove('hidden');
             }
             const { data: { text } } = await Tesseract.recognize(imageToScan, 'eng');
             const cleanedText = sanitizeExtractedText(text);
             
-            parseRes = await fetch('/api/parse', {
+            if (geminiCount < GEMINI_LIMIT) {
+                // We reached here because Gemini failed for some reason other than quota
+                // But we shouldn't burn another quota count for the fallback text structuring.
+            }
+            
+            // Text ONLY fallback — this explicitly disables Gemini on the backend (image_base64="") 
+            // and uses the built-in python Regex parsing instead, costing 0 API quota!
+            let parseRes = await fetch('/api/parse', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: cleanedText, image_base64: "" })
