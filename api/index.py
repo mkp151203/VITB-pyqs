@@ -4,7 +4,7 @@ import os
 import difflib
 import html
 import json
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 import requests as http_req
 import base64
 import io
@@ -665,7 +665,14 @@ def proxy_pdf():
     This sidesteps CORS restrictions so the browser's native PDF viewer works.
     """
     url = request.args.get('url', '')
-    if not url or 'firebasestorage.googleapis.com' not in url:
+    if not url:
+        return 'Invalid or missing URL', 400
+        
+    try:
+        parsed_url = urlparse(url)
+        if parsed_url.hostname not in ['firebasestorage.googleapis.com', 'storage.googleapis.com']:
+            return 'Invalid or missing URL', 400
+    except Exception:
         return 'Invalid or missing URL', 400
     try:
         r = http_req.get(url, stream=True, timeout=30)
@@ -687,7 +694,14 @@ def proxy_pdf():
 @app.route('/api/proxy-file')
 def proxy_file():
     url = request.args.get('url', '')
-    if not url or 'firebasestorage.googleapis.com' not in url:
+    if not url:
+        return 'Invalid or missing URL', 400
+        
+    try:
+        parsed_url = urlparse(url)
+        if parsed_url.hostname not in ['firebasestorage.googleapis.com', 'storage.googleapis.com']:
+            return 'Invalid or missing URL', 400
+    except Exception:
         return 'Invalid or missing URL', 400
 
     try:

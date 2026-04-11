@@ -527,7 +527,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
     // Rate limit guard
     if (!checkRateLimit()) {
         const user = getCurrentUser();
-        const limit = user ? 50 : 20;
+        const limit = user ? 50 : 5;
         showMsg(`Daily upload limit of ${limit} reached. Try again tomorrow.`, "error");
         return;
     }
@@ -727,7 +727,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         
         pBar.style.width = '100%';
         pTitle.innerText = "Uploaded!";
-        const limit = currentUser ? 50 : 20;
+        const limit = currentUser ? 50 : 5;
         pStatus.innerText = `Archived successfully! (${uploadsToday}/${limit} uploads today)`;
         
         setTimeout(() => {
