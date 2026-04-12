@@ -512,7 +512,7 @@ Rules:
 """
             from google.genai import types
             response = client.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model="gemini-3.1-flash-lite-preview",
                 contents=[prompt, img],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
