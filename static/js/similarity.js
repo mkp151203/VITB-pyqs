@@ -3,6 +3,28 @@ import { db, collection, getDocs, query, where } from './firebase.js';
 
 let latestSimilarityRunId = 0;
 
+// Similarity comparisons ignore papers uploaded on or before this date (inclusive).
+// Set to null to compare against all papers.
+// Format: YYYY-MM-DD
+const SIMILARITY_IGNORE_UPLOADED_ON_OR_BEFORE = '2026-04-15';
+
+function toDateOnly(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    // Handles ISO timestamps like "2026-04-15T10:12:00Z" and plain "2026-04-15".
+    const dateOnly = raw.includes('T') ? raw.slice(0, 10) : raw.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return null;
+    return dateOnly;
+}
+
+function shouldIgnorePaperByUploadDate(createdAt) {
+    if (!SIMILARITY_IGNORE_UPLOADED_ON_OR_BEFORE) return false;
+    const createdDate = toDateOnly(createdAt);
+    if (!createdDate) return false;
+    return createdDate <= SIMILARITY_IGNORE_UPLOADED_ON_OR_BEFORE;
+}
+
 function normalizeForSimilarity(str) {
     return String(str || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 }
@@ -86,6 +108,9 @@ export async function checkSimilarityWithDatabase(courseCombined, extractedText)
         let bestMatch = null;
         querySnapshot.forEach(doc => {
             const data = doc.data();
+            if (shouldIgnorePaperByUploadDate(data.createdAt)) {
+                return;
+            }
             if (data.fullExtractedText) {
                 const sim = getSimilarityScore(extractedText, data.fullExtractedText);
                 if (sim > maxSim) {

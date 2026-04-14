@@ -200,6 +200,10 @@ function resetUploadButtonState() {
     const uploadBtn = document.getElementById('btn-upload-final');
     if (!uploadBtn) return;
 
+    if (uploadBtn.dataset.originalText) {
+        uploadBtn.innerHTML = uploadBtn.dataset.originalText;
+    }
+    uploadBtn.classList.remove('is-loading');
     uploadBtn.disabled = false;
     uploadBtn.style.opacity = '1';
     uploadBtn.style.cursor = 'pointer';
