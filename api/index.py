@@ -512,11 +512,11 @@ Rules:
 """
             from google.genai import types
             response = client.models.generate_content(
-                model="gemma-3-4b-it",
+                model="gemini-3.1-flash-lite-preview",
                 contents=[prompt, img],
-                # config=types.GenerateContentConfig(
-                #     response_mime_type="application/json",
-                # )
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                )
             )
             resp_text = response.text.strip()
             print("--- GEMINI RAW RESPONSE ---", flush=True)
