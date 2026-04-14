@@ -549,9 +549,26 @@ async function deletePaperById(paperId, triggerButton) {
     try {
         if (paper.fileUrl && storage) {
             try {
-                await deleteObject(ref(storage, paper.fileUrl));
+                const storagePath = String(paper.storagePath || '').trim();
+                if (storagePath) {
+                    await deleteObject(ref(storage, storagePath));
+                } else {
+                    await deleteObject(ref(storage, paper.fileUrl));
+                }
             } catch (storageErr) {
-                console.warn('Storage deletion warning:', storageErr);
+                // Legacy fallback: decode /o/<encodedPath> from Firebase download URL.
+                try {
+                    const parsed = new URL(String(paper.fileUrl || ''));
+                    const markerIdx = parsed.pathname.indexOf('/o/');
+                    if (markerIdx !== -1) {
+                        const decodedPath = decodeURIComponent(parsed.pathname.slice(markerIdx + 3));
+                        await deleteObject(ref(storage, decodedPath));
+                    } else {
+                        throw storageErr;
+                    }
+                } catch (fallbackErr) {
+                    console.warn('Storage deletion warning:', fallbackErr);
+                }
             }
         }
 

@@ -1,6 +1,8 @@
 // similarity.js — Duplicate detection using TF-IDF Cosine + Jaccard similarity
 import { db, collection, getDocs, query, where } from './firebase.js';
 
+let latestSimilarityRunId = 0;
+
 function normalizeForSimilarity(str) {
     return String(str || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 }
@@ -66,6 +68,7 @@ function getSimilarityScore(str1, str2) {
 
 export async function checkSimilarityWithDatabase(courseCombined, extractedText) {
     if (!db || !courseCombined || courseCombined === "Not Found" || !extractedText.trim()) return;
+    const runId = ++latestSimilarityRunId;
     
     let searchCode = courseCombined;
     if (courseCombined.includes("-")) searchCode = courseCombined.split("-")[0].trim();
@@ -93,6 +96,9 @@ export async function checkSimilarityWithDatabase(courseCombined, extractedText)
         });
         
         const uploadBtn = document.getElementById('btn-upload-final');
+        if (runId !== latestSimilarityRunId) {
+            return { maxSim: 0, bestMatch: null, stale: true };
+        }
         if (uploadBtn && uploadBtn.dataset.blockedByDuplicate === "true") {
             uploadBtn.disabled = false;
             uploadBtn.style.opacity = '1';

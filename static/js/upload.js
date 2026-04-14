@@ -196,6 +196,22 @@ function setButtonLoading(button, loading, loadingText = 'Please wait...') {
     }
 }
 
+function resetUploadButtonState() {
+    const uploadBtn = document.getElementById('btn-upload-final');
+    if (!uploadBtn) return;
+
+    uploadBtn.disabled = false;
+    uploadBtn.style.opacity = '1';
+    uploadBtn.style.cursor = 'pointer';
+
+    if (uploadBtn.dataset.blockedByDuplicate === 'true') {
+        delete uploadBtn.dataset.blockedByDuplicate;
+    }
+
+    // Keep the final guard from rate-limit logic.
+    checkRateLimit();
+}
+
 // === File Selection ===
 document.getElementById('btn-camera').addEventListener('click', () => cameraInput.click());
 document.getElementById('btn-upload').addEventListener('click', () => fileInputMulti.click());
@@ -367,6 +383,7 @@ new Sortable(pagesGrid, {
 btnNextMetadata.addEventListener('click', async () => {
     if (pagesArray.length === 0) return;
     setButtonLoading(btnNextMetadata, true, 'Detecting...');
+    resetUploadButtonState();
     _showView('metadata');
     document.getElementById('metadata-loading').classList.remove('hidden');
     document.getElementById('metadata-form').classList.add('hidden');
@@ -477,6 +494,7 @@ btnNextMetadata.addEventListener('click', async () => {
     } catch (e) {
         console.error("Page 1 OCR Failed", e);
         document.getElementById('extracted-text-pg1').value = "OCR Failed or image unreadable.";
+        resetUploadButtonState();
     } finally {
         setButtonLoading(btnNextMetadata, false);
     }
@@ -588,6 +606,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         
         let downloadUrl = '';
         let fileType = 'pdf';
+        let storagePath = '';
 
         if (total === 1) {
             pStatus.innerText = 'Preparing single image upload...';
@@ -603,6 +622,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             const fileRef = ref(storage, `papers_images/${safeName}`);
             await uploadBytes(fileRef, imageBlob, { contentType: imageBlob.type || 'image/webp' });
             downloadUrl = await getDownloadURL(fileRef);
+            storagePath = fileRef.fullPath;
             fileType = 'image';
         } else {
             pStatus.innerText = `Building PDF with ${total} page(s)...`;
@@ -658,6 +678,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             const fileRef = ref(storage, `papers_pdf/${safeName}`);
             await uploadBytes(fileRef, pdfBlob);
             downloadUrl = await getDownloadURL(fileRef);
+            storagePath = fileRef.fullPath;
             fileType = 'pdf';
         }
         
@@ -675,6 +696,7 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             pageCount: total,
             fileType: fileType,
             fileUrl: downloadUrl,
+            storagePath: storagePath,
             uploadedBy: currentUser ? currentUser.uid : null,
             createdAt: new Date().toISOString()
         });

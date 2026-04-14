@@ -1,4 +1,4 @@
-import { db, collection, getDocs, doc, setDoc, deleteDoc, query, where, orderBy, getDoc, increment } from './firebase.js';
+import { db, storage, collection, getDocs, doc, setDoc, deleteDoc, query, where, orderBy, getDoc, increment, ref, deleteObject } from './firebase.js';
 import { getCurrentUser, logoutUser, updateUserName, getUserProfile, updateAnonymousSetting, onAuthChange } from './auth.js';
 
 let isInitialized = false;
@@ -177,6 +177,42 @@ export function initAccount() {
 function buildPaperFileNameLocal(paper, index) {
     const ext = (paper.fileType || '').toLowerCase() === 'image' ? 'webp' : 'pdf';
     return `paper_${index + 1}.${ext}`;
+}
+
+async function deletePaperFileFromStorage(paper) {
+    const fileUrl = String(paper?.fileUrl || '').trim();
+    const storagePath = String(paper?.storagePath || '').trim();
+    if (!storage) return true;
+
+    // Prefer explicit storage path when available.
+    if (storagePath) {
+        await deleteObject(ref(storage, storagePath));
+        return true;
+    }
+
+    if (!fileUrl) return true;
+
+    // Firebase SDK supports download URLs directly in ref(storage, url).
+    try {
+        await deleteObject(ref(storage, fileUrl));
+        return true;
+    } catch (primaryErr) {
+        // Fallback for legacy docs: decode /o/<encodedPath> from download URL.
+        try {
+            const parsed = new URL(fileUrl);
+            const marker = '/o/';
+            const markerIdx = parsed.pathname.indexOf(marker);
+            if (markerIdx !== -1) {
+                const encoded = parsed.pathname.slice(markerIdx + marker.length);
+                const decodedPath = decodeURIComponent(encoded);
+                await deleteObject(ref(storage, decodedPath));
+                return true;
+            }
+        } catch (_ignored) {
+            // Intentionally swallow parse errors and rethrow original error below.
+        }
+        throw primaryErr;
+    }
 }
 
 async function loadMyUploads() {
@@ -390,6 +426,7 @@ function renderPapers(papers, container, context = 'collections', parentCollecti
                     div.style.opacity = 0.5;
                     try {
                         const user = getCurrentUser();
+                        await deletePaperFileFromStorage(p);
                         await deleteDoc(doc(db, "question_papers_multi", p.id));
                         // Decrement the user's leaderboard count
                         if (user) {
