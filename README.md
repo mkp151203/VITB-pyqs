@@ -45,7 +45,7 @@ A smart, community-driven question paper repository for VIT Bhopal University st
 │           Flask Backend (api/index.py)                │
 │                                                      │
 │  • Regex + fuzzy matching (difflib) for metadata     │
-│  • Course CSV database lookup                        │
+│  • Server-side Firestore course catalog lookup       │
 │  • SEO landing pages (/courses, /pyq/<slug>)         │
 │  • PDF/file proxy for CORS-free previews             │
 └──────────────────────────────────────────────────────┘
@@ -146,7 +146,6 @@ Navigate to `/admin` to access the admin login. Admins can:
 firebase_app/
 ├── api/
 │   ├── index.py              # Flask backend — routes, OCR parsing, SEO pages
-│   └── courses.csv           # Master course database (code → title mapping)
 ├── static/
 │   ├── css/
 │   │   └── style.css         # Complete UI stylesheet

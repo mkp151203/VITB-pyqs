@@ -748,6 +748,10 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         localStorage.removeItem(PENDING_REQUEST_KEY);
         renderPendingRequestNotice(null);
         
+        // Trigger server cache refresh (double-check strategy)
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 5000);
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 60000);
+        
         // Increment the daily upload counter
         const uploadsToday = incrementUploadCount();
         

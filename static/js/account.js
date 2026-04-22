@@ -428,6 +428,9 @@ function renderPapers(papers, container, context = 'collections', parentCollecti
                         const user = getCurrentUser();
                         await deletePaperFileFromStorage(p);
                         await deleteDoc(doc(db, "question_papers_multi", p.id));
+                        // Trigger server cache refresh
+                        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 5000);
+                        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 60000);
                         // Decrement the user's leaderboard count
                         if (user) {
                             try {

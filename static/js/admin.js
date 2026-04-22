@@ -174,6 +174,10 @@ async function deleteCourseFromCatalog(courseCode, triggerButton) {
     setButtonLoading(triggerButton, true, 'Deleting...');
     try {
         await deleteDoc(doc(db, 'courses_catalog', docId));
+        // Trigger server cache refresh
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 5000);
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 60000);
+        
         catalogCourses = catalogCourses.filter((item) => item.id !== docId && item.courseCode !== courseCode);
         if (currentSearchLevel === 'subject') {
             renderSubjects((adminSearchInput?.value || '').toLowerCase());
@@ -211,6 +215,10 @@ async function addCourseToCatalog() {
             courseCombined,
             updatedAt: serverTimestamp()
         }, { merge: true });
+        
+        // Trigger server cache refresh
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 5000);
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 60000);
 
         const existingIndex = catalogCourses.findIndex((item) => item.id === docId);
         const nextEntry = {
@@ -573,6 +581,10 @@ async function deletePaperById(paperId, triggerButton) {
         }
 
         await deleteDoc(doc(db, 'question_papers_multi', paperId));
+        
+        // Trigger server cache refresh
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 5000);
+        setTimeout(() => fetch('/api/refresh-cache', { method: 'POST' }).catch(console.error), 60000);
 
         const reportsSnapshot = await getDocs(query(collection(db, 'paper_reports'), where('paperId', '==', paperId)));
         await Promise.all(reportsSnapshot.docs.map((item) => deleteDoc(doc(db, 'paper_reports', item.id))));

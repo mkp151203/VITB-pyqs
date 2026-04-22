@@ -1,6 +1,4 @@
 // courses.js — Course dropdown management
-import { db, collection, getDocs } from './firebase.js';
-
 let allCoursesList = [];
 const OTHER_COURSE_VALUE = '__other__';
 
@@ -57,50 +55,8 @@ async function loadCoursesFromApi() {
     return dedupeAndSortCourses(list);
 }
 
-async function loadCoursesFromFirestore() {
-    if (!db) return [];
-    const snapshot = await getDocs(collection(db, 'courses_catalog'));
-    const list = [];
-    snapshot.forEach((docItem) => {
-        const data = docItem.data() || {};
-        const combined = data.courseCombined || data.course || data.name;
-        if (combined) {
-            list.push(combined);
-            return;
-        }
-
-        const code = (data.courseCode || data.code || '').toString().trim();
-        const title = (data.courseTitle || data.title || '').toString().trim();
-        if (code && title) {
-            list.push(`${code} - ${title}`);
-        } else if (code) {
-            list.push(code);
-        } else if (title) {
-            list.push(title);
-        }
-    });
-    return dedupeAndSortCourses(list);
-}
-
 export async function loadCourseCatalog() {
-    // Load from both sources and merge (Firestore primary, CSV fallback)
-    let firestoreCourses = [];
-    let apiCourses = [];
-
-    try {
-        firestoreCourses = await loadCoursesFromFirestore();
-    } catch (e) {
-        console.warn('Firestore courses_catalog unavailable:', e.message || e);
-    }
-
-    try {
-        apiCourses = await loadCoursesFromApi();
-    } catch (e) {
-        console.warn('API courses fallback unavailable:', e.message || e);
-    }
-
-    // Merge both lists — Firestore entries take priority via deduplication
-    return dedupeAndSortCourses([...firestoreCourses, ...apiCourses]);
+    return loadCoursesFromApi();
 }
 
 export async function fetchCourses() {

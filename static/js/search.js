@@ -1,4 +1,4 @@
-import { db, collection, getDocs } from './firebase.js';
+import { db, collection, getDocs, storage, ref, getDownloadURL } from './firebase.js';
 import { loadCourseCatalog } from './courses.js';
 import { openCollectionModal } from './account.js';
 
@@ -158,9 +158,10 @@ export async function loadAllSearchablePapers(initialFilter = '') {
     grid.innerHTML = '<div class="loader"></div>';
     
     try {
-        const querySnapshot = await getDocs(collection(db, "question_papers_multi"));
-        searchArchives = [];
-        querySnapshot.forEach(doc => searchArchives.push({ id: doc.id, ...doc.data() }));
+        const url = await getDownloadURL(ref(storage, "papers_index.json"));
+        const proxyUrl = `/api/proxy-file?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        searchArchives = await response.json();
         searchArchives.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         const catalog = await loadCourseCatalog();

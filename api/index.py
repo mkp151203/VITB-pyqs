@@ -1,4 +1,3 @@
-import csv
 import re
 import os
 import difflib
@@ -8,6 +7,7 @@ from urllib.parse import quote, urlparse
 import requests as http_req
 import base64
 import io
+import time
 from google import genai
 from PIL import Image
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, redirect
@@ -22,31 +22,33 @@ CORS(app)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# ── Firestore course loading via REST API ──
-def load_courses_from_firestore():
-    """Try to load courses from Firestore courses_catalog collection via REST API."""
+def load_courses_from_firestore(current_etag=None):
+    """Try to load courses from courses_catalog.json in Firebase Storage."""
     loaded = {}
     try:
-        project_id = os.environ.get('FIREBASE_PROJECT_ID', '').strip()
-        if not project_id:
-            return loaded
+        bucket = os.environ.get('FIREBASE_STORAGE_BUCKET', '').strip()
+        if not bucket:
+            return None, None
 
-        url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/courses_catalog?pageSize=1000"
+        url = f"https://firebasestorage.googleapis.com/v0/b/{bucket}/o/courses_catalog.json?alt=media"
+        headers = {}
+        if current_etag:
+            headers['If-None-Match'] = current_etag
         
-        response = http_req.get(url, timeout=7)
+        response = http_req.get(url, headers=headers, timeout=7)
+        
+        if response.status_code == 304:
+            print(f"[DEBUG] ETag matched! courses_catalog.json is unchanged (304 Not Modified). Using in-memory cache.")
+            return None, current_etag
+
         if response.status_code == 200:
-            data = response.json()
-            documents = data.get('documents', [])
+            new_etag = response.headers.get('ETag')
+            documents = response.json()
             for doc in documents:
-                fields = doc.get('fields', {})
+                code_val = doc.get('courseCode')
+                title_val = doc.get('courseTitle')
                 
-                code_field = fields.get('courseCode') or fields.get('code')
-                title_field = fields.get('courseTitle') or fields.get('title')
-                
-                if code_field and title_field:
-                    code_val = code_field.get('stringValue', '')
-                    title_val = title_field.get('stringValue', '')
-                    
+                if code_val and title_val:
                     code = code_val.strip().upper()
                     title = title_val.strip()
                     
@@ -54,63 +56,69 @@ def load_courses_from_firestore():
                         loaded[code] = title
                         
             if loaded:
-                print(f"Loaded {len(loaded)} courses from Firestore (Client REST API)")
+                print(f"[DEBUG] Downloaded fresh courses_catalog.json via REST API (200 OK). New ETag: {new_etag}. Courses loaded: {len(loaded)}")
+            return loaded, new_etag
         else:
-            print(f"Firestore REST API load skipped: Status {response.status_code}")
+            print(f"courses_catalog.json load skipped: Status {response.status_code}")
     except Exception as e:
-        print(f"Firestore course load skipped (REST Client Error): {e}")
-    return loaded
+        print(f"courses_catalog.json load skipped (REST Client Error): {e}")
+    return None, None
 
 
-def load_courses_dict():
-    """Load courses from CSV (fallback source)."""
-    loaded = {}
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    candidate_paths = [
-        os.path.join(current_dir, 'courses.csv'),
-        os.path.join(current_dir, '../api/courses.csv'),
-        os.path.join(os.getcwd(), 'api', 'courses.csv'),
-    ]
+def load_all_courses(current_etag=None):
+    """Load courses from server-side courses_catalog.json catalog only."""
+    firestore_courses, new_etag = load_courses_from_firestore(current_etag)
+    if firestore_courses is not None:
+        print(f"Total courses loaded from courses_catalog.json catalog: {len(firestore_courses)}")
+    return firestore_courses, new_etag
 
-    csv_path = None
-    for candidate in candidate_paths:
-        normalized = os.path.abspath(candidate)
-        if os.path.exists(normalized):
-            csv_path = normalized
-            break
 
-    if not csv_path:
-        print("Error loading courses: courses.csv not found in expected paths")
-        return loaded
+_courses_dict = {}
+_courses_etag = None
 
+def refresh_courses_catalog():
+    global _courses_dict, _courses_etag
+    new_dict, new_etag = load_all_courses(_courses_etag)
+    if new_dict is not None:
+        _courses_dict = new_dict
+        _courses_etag = new_etag
+
+def get_courses_dict():
+    global _courses_dict
+    if not _courses_dict:
+        refresh_courses_catalog()
+    return _courses_dict
+
+_papers_index_bytes = None
+_papers_index_etag = None
+
+def refresh_papers_index():
+    global _papers_index_bytes, _papers_index_etag
+    bucket = os.environ.get('FIREBASE_STORAGE_BUCKET', '').strip()
+    if not bucket:
+        return
+        
+    url = f"https://firebasestorage.googleapis.com/v0/b/{bucket}/o/papers_index.json?alt=media"
+    headers = {}
+    if _papers_index_etag:
+        headers['If-None-Match'] = _papers_index_etag
+        
     try:
-        with open(csv_path, mode='r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if 'Course Code' in row and 'Course Title' in row:
-                    code = (row.get('Course Code') or '').strip().upper()
-                    title = (row.get('Course Title') or '').strip()
-                    if code and title:
-                        loaded[code] = title
+        response = http_req.get(url, headers=headers, timeout=15)
+        if response.status_code == 304:
+            print("[DEBUG] papers_index.json Server Cache: 304 Not Modified. Memory is up-to-date.")
+        elif response.status_code == 200:
+            _papers_index_bytes = response.content
+            _papers_index_etag = response.headers.get('ETag')
+            print(f"[DEBUG] papers_index.json Server Cache: Downloaded fresh bytes. New ETag: {_papers_index_etag}")
     except Exception as e:
-        print(f"Error loading courses from {csv_path}: {e}")
+        print(f"Error refreshing papers_index.json: {e}")
 
-    return loaded
-
-
-def load_all_courses():
-    """Load courses from Firestore first, then merge with CSV as fallback."""
-    # Firestore = primary
-    firestore_courses = load_courses_from_firestore()
-    # CSV = fallback
-    csv_courses = load_courses_dict()
-    # Merge: CSV first, then Firestore overwrites (Firestore takes priority)
-    merged = {**csv_courses, **firestore_courses}
-    print(f"Total courses loaded: {len(merged)} (Firestore: {len(firestore_courses)}, CSV: {len(csv_courses)})")
-    return merged
-
-
-courses_dict = load_all_courses()
+def get_papers_index_bytes():
+    global _papers_index_bytes
+    if not _papers_index_bytes:
+        refresh_papers_index()
+    return _papers_index_bytes
 
 HEADER_STOP_REGEX = re.compile(
     r'\b(?:questions?|answer(?:\s+all)?|marks?|question\s*description|part\s*[a-z]|section\s*[a-z])\b',
@@ -136,10 +144,8 @@ def get_site_url():
 
 
 def get_sorted_courses():
-    global courses_dict
-    if not courses_dict:
-        courses_dict = load_all_courses()
-    return sorted(courses_dict.items(), key=lambda item: item[0])
+    cdict = get_courses_dict()
+    return sorted(cdict.items(), key=lambda item: item[0])
 
 
 def slugify_course_title(title):
@@ -227,16 +233,17 @@ def build_page(title, description, canonical_path, heading, intro, links_html, e
 </body>
 </html>"""
 
-def get_course_details_from_csv(extracted_code, extracted_title, full_text):
-    if not courses_dict:
+def get_course_details_from_catalog(extracted_code, extracted_title, full_text):
+    cdict = get_courses_dict()
+    if not cdict:
         return extracted_code, extracted_title
 
     # 1. Fuzzy match for Course Code
     if extracted_code != "Not Found":
         cleaned_code = extracted_code.replace('O', '0').replace('I', '1').replace('l', '1').replace('S', '5').upper()
-        matches = difflib.get_close_matches(cleaned_code, courses_dict.keys(), n=1, cutoff=0.7)
+        matches = difflib.get_close_matches(cleaned_code, cdict.keys(), n=1, cutoff=0.7)
         if matches:
-            return matches[0], courses_dict[matches[0]]
+            return matches[0], cdict[matches[0]]
             
     # 2. Case-insensitive Fuzzy match for Course Title (Fixing "&" vs "AND")
     if extracted_title != "Not Found":
@@ -244,7 +251,7 @@ def get_course_details_from_csv(extracted_code, extracted_title, full_text):
         
         # Build dictionary mapping normalized uppercase titles to their original format
         title_map = {}
-        for c, t in courses_dict.items():
+        for c, t in cdict.items():
             norm_t = t.upper().replace('&', 'AND')
             title_map[norm_t] = (c, t)
             
@@ -260,12 +267,12 @@ def get_course_details_from_csv(extracted_code, extracted_title, full_text):
     text_mangled = text_letters_digits.replace('O', '0').replace('I', '1').replace('L', '1').replace('S', '5')
     
     # 3a. Search for mangled code in mangled text
-    for code, title in courses_dict.items():
+    for code, title in cdict.items():
         if code in text_mangled:
             return code, title
             
     # 3b. Search for mangled title in mangled text 
-    for code, title in courses_dict.items():
+    for code, title in cdict.items():
         title_norm = re.sub(r'[^A-Z0-9]', '', title.upper().replace('&', 'AND'))
         if len(title_norm) > 10:
             title_mangled = title_norm.replace('O', '0').replace('I', '1').replace('L', '1').replace('S', '5')
@@ -378,28 +385,29 @@ def course_pyq_page(course_ref):
     ref = (course_ref or '').strip()
     ref_upper = ref.upper()
     code_to_slug, slug_to_code = get_course_slug_maps()
+    cdict = get_courses_dict()
 
     code = None
     title = None
 
     # Legacy code-based URL support: /pyq/cse2001 -> redirect to slug URL
-    if ref_upper in courses_dict:
+    if ref_upper in cdict:
         code = ref_upper
-        title = courses_dict.get(code)
+        title = cdict.get(code)
         slug = code_to_slug.get(code, code.lower())
         return redirect(f'/pyq/{slug}', code=301)
 
     mapped_code = slug_to_code.get(ref.lower())
     if mapped_code:
         code = mapped_code
-        title = courses_dict.get(code)
+        title = cdict.get(code)
 
     if not title:
         return Response(
             build_page(
                 title='Course PYQ Not Found | VIT Bhopal PYQ',
                 description='The requested VIT Bhopal course page was not found.',
-                canonical_path=f'/pyq/{html.escape(course_code)}',
+                canonical_path=f'/pyq/{html.escape(ref)}',
                 heading='Course not found',
                 intro='This course is not available in the current catalog.',
                 links_html='<a class="paper-card" href="/courses" style="text-decoration:none;color:inherit;"><div class="paper-details"><h3>Go to all courses</h3></div></a>'
@@ -560,7 +568,7 @@ Rules:
                 text_raw = gemini_text
             
             if g_course_code or g_course_title:
-                code, title = get_course_details_from_csv(g_course_code or "Not Found", g_course_title or "Not Found", text_raw)
+                code, title = get_course_details_from_catalog(g_course_code or "Not Found", g_course_title or "Not Found", text_raw)
                 
                 if code != "Not Found" and title != "Not Found":
                     course_code = code
@@ -611,7 +619,7 @@ Rules:
             if title_match2:
                  course_title = title_match2.group(1).strip()
                  
-        course_code, course_title = get_course_details_from_csv(course_code, course_title, detection_text)
+        course_code, course_title = get_course_details_from_catalog(course_code, course_title, detection_text)
                  
         if course_code == "Not Found": course_code = ""
         if course_title == "Not Found": course_title = ""
@@ -641,10 +649,8 @@ Rules:
 
 @app.route('/api/courses', methods=['GET'])
 def get_courses():
-    global courses_dict
-    if not courses_dict:
-        courses_dict = load_all_courses()
-    courses_list = [f"{code} - {title}" for code, title in courses_dict.items()]
+    cdict = get_courses_dict()
+    courses_list = [f"{code} - {title}" for code, title in cdict.items()]
     courses_list.sort()
     return jsonify(courses_list)
 
@@ -705,13 +711,49 @@ def proxy_file():
         return 'Invalid or missing URL', 400
 
     try:
-        r = http_req.get(url, stream=True, timeout=30)
+        if 'papers_index.json' in url:
+            p_bytes = get_papers_index_bytes()
+            headers = {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=300',
+            }
+            if _papers_index_etag:
+                headers['ETag'] = _papers_index_etag
+                
+            client_etag = request.headers.get('If-None-Match')
+            if client_etag and client_etag == _papers_index_etag:
+                print(f"[DEBUG] Local Memory Cache matched browser ETag. Returning 304 Not Modified.")
+                return Response(status=304)
+                
+            print(f"[DEBUG] Serving papers_index.json from Server Memory.")
+            return Response(p_bytes, headers=headers)
+
+        req_headers = {}
+        client_etag = request.headers.get('If-None-Match')
+        if client_etag:
+            req_headers['If-None-Match'] = client_etag
+            
+        r = http_req.get(url, headers=req_headers, stream=True, timeout=30)
+        
+        if r.status_code == 304:
+            print(f"[DEBUG] ETag matched! Browser sent valid If-None-Match. Proxy returning 304 Not Modified.")
+            return Response(status=304)
+            
         r.raise_for_status()
+        
         headers = {
             'Content-Type': r.headers.get('Content-Type', 'application/octet-stream'),
             'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'public, max-age=86400',
         }
+        
+        if 'ETag' in r.headers:
+            headers['ETag'] = r.headers['ETag']
+            print(f"[DEBUG] Downloaded fresh file for proxy (200 OK). Sending ETag to browser: {headers['ETag']}")
+        else:
+            print(f"[DEBUG] Downloaded fresh file for proxy (200 OK). No ETag provided by Firebase.")
+            
         return Response(
             stream_with_context(r.iter_content(chunk_size=32768)),
             status=r.status_code,
@@ -719,6 +761,13 @@ def proxy_file():
         )
     except Exception as e:
         return str(e), 502
+
+@app.route('/api/refresh-cache', methods=['POST', 'GET'])
+def refresh_cache_endpoint():
+    print("[DEBUG] Manual Cache Refresh Triggered")
+    refresh_courses_catalog()
+    refresh_papers_index()
+    return jsonify({"status": "success", "message": "Cache refresh checks completed"})
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
