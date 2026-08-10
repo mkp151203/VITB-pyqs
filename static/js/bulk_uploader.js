@@ -544,6 +544,11 @@ btnUploadBatch.addEventListener('click', async () => {
         showMsg('Course is required.', 'error');
         return;
     }
+    const slotInfoVal = (reviewSlot?.value || '').trim();
+    if (slotInfoVal && !/^[A-Za-z]\d{2}(\+[A-Za-z]\d{2})*$/.test(slotInfoVal)) {
+        showMsg('Invalid slot format. Must be a letter followed by two numbers (e.g., A11 or A11+B12).', 'error');
+        return;
+    }
     if (!examName) {
         showMsg('Exam type is required.', 'error');
         return;

@@ -302,6 +302,11 @@ export function initRequests() {
             return;
         }
 
+        if (slot && !/^[A-Za-z]\d{2}(\+[A-Za-z]\d{2})*$/.test(slot)) {
+            showMessage('Invalid slot format. Must be a letter followed by two numbers (e.g., A11 or A11+B12).', 'error');
+            return;
+        }
+
         setButtonLoading(btnSendRequest, true, 'Posting...');
         try {
             const openRequests = await loadOpenRequests();

@@ -68,10 +68,18 @@ export async function restoreSearchStateFromHistory(state) {
         return;
     }
 
-    const targetExam = String(state?.examName || '').toLowerCase().includes('mid') ? 'Midterm' : 'Term End';
+    let targetExam = String(state?.examName || '').trim();
+    if (!targetExam) targetExam = 'FAT'; // Default fallback
     currentSearchLevel = 'paper';
     currentSelectedExam = targetExam;
-    renderPapersList(targetExam === 'Midterm' ? subjectData.midterm : subjectData.termEnd);
+    
+    let listToRender = [];
+    if (targetExam === 'CAT-1') listToRender = subjectData.cat1;
+    else if (targetExam === 'CAT-2') listToRender = subjectData.cat2;
+    else if (targetExam === 'Midterm') listToRender = subjectData.midterm;
+    else listToRender = subjectData.fat;
+    
+    renderPapersList(listToRender);
 }
 
 function setButtonLoading(button, loading, loadingText = 'Please wait...') {
@@ -172,14 +180,21 @@ export async function loadAllSearchablePapers(initialFilter = '') {
             if (!groupedBySubject[key]) {
                 groupedBySubject[key] = {
                     courseTitle: p.courseTitle || p.courseCode || key,
-                    midterm: [],
-                    termEnd: []
+                    cat1: [],
+                    cat2: [],
+                    fat: [],
+                    midterm: []
                 };
             }
-            if (p.examName && p.examName.toLowerCase().includes('mid')) {
+            const ex = String(p.examName || '').toLowerCase();
+            if (ex === 'cat-1' || ex === 'cat1') {
+                groupedBySubject[key].cat1.push(p);
+            } else if (ex === 'cat-2' || ex === 'cat2') {
+                groupedBySubject[key].cat2.push(p);
+            } else if (ex.includes('mid')) {
                 groupedBySubject[key].midterm.push(p);
             } else {
-                groupedBySubject[key].termEnd.push(p);
+                groupedBySubject[key].fat.push(p);
             }
         });
 
@@ -198,8 +213,10 @@ export async function loadAllSearchablePapers(initialFilter = '') {
             if (!groupedBySubject[code]) {
                 groupedBySubject[code] = {
                     courseTitle: title,
-                    midterm: [],
-                    termEnd: []
+                    cat1: [],
+                    cat2: [],
+                    fat: [],
+                    midterm: []
                 };
             } else if (!groupedBySubject[code].courseTitle || groupedBySubject[code].courseTitle === code) {
                 groupedBySubject[code].courseTitle = title;
@@ -245,7 +262,7 @@ function renderSubjects(filterQuery = '') {
 
     pageKeys.forEach(key => {
         const data = groupedBySubject[key];
-        const total = data.midterm.length + data.termEnd.length;
+        const total = data.cat1.length + data.cat2.length + data.fat.length + data.midterm.length;
         const div = document.createElement('div');
         div.className = 'paper-card';
         div.style.cursor = 'pointer';
@@ -277,9 +294,11 @@ function renderSubjects(filterQuery = '') {
                 await downloadPapersZip({
                     zipName: `${key}_${data.courseTitle}_all`,
                     folders: [
-                        { name: 'Midterm', papers: data.midterm },
-                        { name: 'Term End', papers: data.termEnd }
-                    ]
+                        { name: 'CAT-1', papers: data.cat1 },
+                        { name: 'CAT-2', papers: data.cat2 },
+                        { name: 'FAT / Term End', papers: data.fat },
+                        { name: 'Midterm', papers: data.midterm }
+                    ].filter(f => f.papers.length > 0)
                 });
             } catch (error) {
                 console.error('Course ZIP failed:', error);
@@ -340,75 +359,55 @@ function renderExamTypes() {
     document.getElementById('search-bar-container').classList.add('hidden');
     document.getElementById('search-breadcrumb').innerText = `Subjects / ${currentSelectedSubject.courseTitle}`;
     
-    const midDiv = document.createElement('div');
-    midDiv.className = 'paper-card';
-    midDiv.style.cursor = 'pointer';
-    midDiv.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-            <div>
-                <h3>Mid-term Exam</h3>
-                <p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.midterm.length} paper${currentSelectedSubject.midterm.length !== 1 ? 's' : ''}</p>
+    const types = [
+        { key: 'cat1', label: 'CAT-1', id: 'cat1', examState: 'CAT-1' },
+        { key: 'cat2', label: 'CAT-2', id: 'cat2', examState: 'CAT-2' },
+        { key: 'fat', label: 'FAT / Term End', id: 'fat', examState: 'FAT' },
+        { key: 'midterm', label: 'Mid-term Exam (Legacy)', id: 'midterm', examState: 'Midterm' }
+    ];
+
+    types.forEach(t => {
+        const papers = currentSelectedSubject[t.key] || [];
+        if (papers.length === 0) return;
+
+        const div = document.createElement('div');
+        div.className = 'paper-card';
+        div.style.cursor = 'pointer';
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div>
+                    <h3>${t.label}</h3>
+                    <p style="color:#888; margin:0; font-size:0.85rem;">${papers.length} paper${papers.length !== 1 ? 's' : ''}</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" type="button" data-zip-exam="${t.id}">Download ZIP</button>
             </div>
-            <button class="btn btn-secondary btn-sm" type="button" data-zip-exam="midterm">Download ZIP</button>
-        </div>
-    `;
-    midDiv.addEventListener('click', () => {
-        currentSearchLevel = 'paper';
-        currentSelectedExam = 'Midterm';
-        renderPapersList(currentSelectedSubject.midterm);
-        pushSearchLevelState('paper', { subjectCode: currentSelectedSubjectCode, examName: 'Midterm' });
+        `;
+
+        div.addEventListener('click', () => {
+            currentSearchLevel = 'paper';
+            currentSelectedExam = t.examState;
+            renderPapersList(papers);
+            pushSearchLevelState('paper', { subjectCode: currentSelectedSubjectCode, examName: currentSelectedExam });
+        });
+
+        const zipBtn = div.querySelector(`[data-zip-exam="${t.id}"]`);
+        zipBtn?.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            setButtonLoading(zipBtn, true, 'Preparing ZIP...');
+            try {
+                await downloadPapersZip({
+                    zipName: `${currentSelectedSubjectCode || 'course'}_${currentSelectedSubject.courseTitle}_${t.id}`,
+                    folders: [{ name: t.label, papers: papers }]
+                });
+            } catch (error) {
+                console.error(`${t.label} ZIP failed:`, error);
+            } finally {
+                setButtonLoading(zipBtn, false);
+            }
+        });
+
+        grid.appendChild(div);
     });
-    const midZipBtn = midDiv.querySelector('[data-zip-exam="midterm"]');
-    midZipBtn?.addEventListener('click', async (event) => {
-        event.stopPropagation();
-        setButtonLoading(midZipBtn, true, 'Preparing ZIP...');
-        try {
-            await downloadPapersZip({
-                zipName: `${currentSelectedSubjectCode || 'course'}_${currentSelectedSubject.courseTitle}_midterm`,
-                folders: [{ name: 'Midterm', papers: currentSelectedSubject.midterm }]
-            });
-        } catch (error) {
-            console.error('Midterm ZIP failed:', error);
-        } finally {
-            setButtonLoading(midZipBtn, false);
-        }
-    });
-    grid.appendChild(midDiv);
-    
-    const termDiv = document.createElement('div');
-    termDiv.className = 'paper-card';
-    termDiv.style.cursor = 'pointer';
-    termDiv.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-            <div>
-                <h3>Term-End Exam</h3>
-                <p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.termEnd.length} paper${currentSelectedSubject.termEnd.length !== 1 ? 's' : ''}</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" type="button" data-zip-exam="termend">Download ZIP</button>
-        </div>
-    `;
-    termDiv.addEventListener('click', () => {
-        currentSearchLevel = 'paper';
-        currentSelectedExam = 'Term End';
-        renderPapersList(currentSelectedSubject.termEnd);
-        pushSearchLevelState('paper', { subjectCode: currentSelectedSubjectCode, examName: 'Term End' });
-    });
-    const termZipBtn = termDiv.querySelector('[data-zip-exam="termend"]');
-    termZipBtn?.addEventListener('click', async (event) => {
-        event.stopPropagation();
-        setButtonLoading(termZipBtn, true, 'Preparing ZIP...');
-        try {
-            await downloadPapersZip({
-                zipName: `${currentSelectedSubjectCode || 'course'}_${currentSelectedSubject.courseTitle}_termend`,
-                folders: [{ name: 'Term End', papers: currentSelectedSubject.termEnd }]
-            });
-        } catch (error) {
-            console.error('Term-End ZIP failed:', error);
-        } finally {
-            setButtonLoading(termZipBtn, false);
-        }
-    });
-    grid.appendChild(termDiv);
 }
 
 function renderPapersList(papers) {

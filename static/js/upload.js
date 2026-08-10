@@ -581,7 +581,11 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
         showMsg("Exam Name is mandatory. Please select an exam.", "error");
         return;
     }
-
+    const slotInfoVal = (document.getElementById('slot-info')?.value || '').trim();
+    if (slotInfoVal && !/^[A-Za-z]\d{2}(\+[A-Za-z]\d{2})*$/.test(slotInfoVal)) {
+        showMsg("Invalid slot format. Must be a letter followed by two numbers (e.g., A11 or A11+B12).", "error");
+        return;
+    }
     const pendingRequest = getPendingRequestPrefill();
 
     setButtonLoading(uploadBtn, true, uploadBtn?.innerHTML || 'Process All Pages &amp; Upload');

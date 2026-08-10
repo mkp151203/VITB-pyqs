@@ -632,10 +632,14 @@ Rules:
             course_combined = course_title
 
     # Exam Name Regex Verification (Required since prompt doesn't cover EXAM type)
-    if re.search(r'MID\s*TERM|CAT\s*\d?', detection_text, re.IGNORECASE):
+    if re.search(r'CAT[\s-]*1', detection_text, re.IGNORECASE):
+        exam_name = "CAT-1"
+    elif re.search(r'CAT[\s-]*2', detection_text, re.IGNORECASE):
+        exam_name = "CAT-2"
+    elif re.search(r'MID\s*TERM', detection_text, re.IGNORECASE):
         exam_name = "Midterm"
     elif re.search(r'TERM\s*END|END\s*TERM|FAT', detection_text, re.IGNORECASE):
-        exam_name = "Term End"
+        exam_name = "FAT"
 
     return jsonify({
         "course_combined": course_combined,

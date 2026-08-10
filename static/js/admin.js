@@ -273,15 +273,22 @@ function buildGroupedBySubject() {
             groupedBySubject[key] = {
                 courseCode: key,
                 courseTitle: paper.courseTitle || paper.courseCode || 'Unknown Subject',
-                midterm: [],
-                termEnd: []
+                cat1: [],
+                cat2: [],
+                fat: [],
+                midterm: []
             };
         }
 
-        if ((paper.examName || '').toLowerCase().includes('mid')) {
+        const ex = String(paper.examName || '').toLowerCase();
+        if (ex === 'cat-1' || ex === 'cat1') {
+            groupedBySubject[key].cat1.push(paper);
+        } else if (ex === 'cat-2' || ex === 'cat2') {
+            groupedBySubject[key].cat2.push(paper);
+        } else if (ex.includes('mid')) {
             groupedBySubject[key].midterm.push(paper);
         } else {
-            groupedBySubject[key].termEnd.push(paper);
+            groupedBySubject[key].fat.push(paper);
         }
     });
 }
@@ -474,7 +481,7 @@ function renderSubjects(filterQuery = '') {
     }
 
     pageSubjects.forEach((data) => {
-        const total = data.midterm.length + data.termEnd.length;
+        const total = data.cat1.length + data.cat2.length + data.fat.length + data.midterm.length;
         const canOpenPapers = total > 0;
         const cardTitle = data.courseCombined || `${data.courseCode} - ${data.courseTitle}`;
         const card = document.createElement('div');
@@ -522,27 +529,30 @@ function renderExamTypes() {
         adminSearchBreadcrumb.innerText = `Subjects / ${currentSelectedSubject.courseTitle}`;
     }
 
-    const midCard = document.createElement('div');
-    midCard.className = 'paper-card';
-    midCard.style.cursor = 'pointer';
-    midCard.innerHTML = `<h3>Mid-term Exam</h3><p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.midterm.length} paper${currentSelectedSubject.midterm.length !== 1 ? 's' : ''}</p>`;
-    midCard.addEventListener('click', () => {
-        currentSearchLevel = 'paper';
-        currentSelectedExam = 'Midterm';
-        renderPapersList(currentSelectedSubject.midterm);
-    });
-    allPapersList.appendChild(midCard);
+    const types = [
+        { key: 'cat1', label: 'CAT-1', id: 'cat1', examState: 'CAT-1' },
+        { key: 'cat2', label: 'CAT-2', id: 'cat2', examState: 'CAT-2' },
+        { key: 'fat', label: 'FAT / Term End', id: 'fat', examState: 'FAT' },
+        { key: 'midterm', label: 'Mid-term Exam (Legacy)', id: 'midterm', examState: 'Midterm' }
+    ];
 
-    const termCard = document.createElement('div');
-    termCard.className = 'paper-card';
-    termCard.style.cursor = 'pointer';
-    termCard.innerHTML = `<h3>Term-End Exam</h3><p style="color:#888; margin:0; font-size:0.85rem;">${currentSelectedSubject.termEnd.length} paper${currentSelectedSubject.termEnd.length !== 1 ? 's' : ''}</p>`;
-    termCard.addEventListener('click', () => {
-        currentSearchLevel = 'paper';
-        currentSelectedExam = 'Term End';
-        renderPapersList(currentSelectedSubject.termEnd);
+    types.forEach(t => {
+        const papers = currentSelectedSubject[t.key] || [];
+        if (papers.length === 0) return;
+
+        const card = document.createElement('div');
+        card.className = 'paper-card';
+        card.style.cursor = 'pointer';
+        card.innerHTML = `<h3>${t.label}</h3><p style="color:#888; margin:0; font-size:0.85rem;">${papers.length} paper${papers.length !== 1 ? 's' : ''}</p>`;
+        
+        card.addEventListener('click', () => {
+            currentSearchLevel = 'paper';
+            currentSelectedExam = t.examState;
+            renderPapersList(papers);
+        });
+        
+        allPapersList.appendChild(card);
     });
-    allPapersList.appendChild(termCard);
 }
 
 async function deletePaperById(paperId, triggerButton) {
@@ -600,11 +610,10 @@ async function deletePaperById(paperId, triggerButton) {
                 renderSubjects((adminSearchInput?.value || '').toLowerCase());
             } else {
                 currentSelectedSubject = refreshed;
-                if (currentSelectedExam === 'Midterm') {
-                    renderPapersList(refreshed.midterm);
-                } else {
-                    renderPapersList(refreshed.termEnd);
-                }
+                if (currentSelectedExam === 'CAT-1') renderPapersList(refreshed.cat1);
+                else if (currentSelectedExam === 'CAT-2') renderPapersList(refreshed.cat2);
+                else if (currentSelectedExam === 'Midterm') renderPapersList(refreshed.midterm);
+                else renderPapersList(refreshed.fat);
             }
         } else if (currentSearchLevel === 'exam' && currentSelectedSubject) {
             const refreshed = groupedBySubject[currentSelectedSubject.courseCode];
