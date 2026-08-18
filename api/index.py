@@ -507,6 +507,7 @@ Extract the following fields from this exam paper image and return ONLY JSON:
   "course_title": "",
   "course_code": "",
   "slot": "",
+  "exam_name": "",
   "extracted text": "",
   "question paper(yes/no)": ""
 }
@@ -514,7 +515,8 @@ Extract the following fields from this exam paper image and return ONLY JSON:
 Rules:
 - Do NOT include any explanation
 - Return only valid JSON
-- give response question paper as "yes" only if it is a valid university exam question paper else give "no" as response
+- For 'exam_name', identify if it is CAT 1, CAT 2, FAT, or Midterm.
+- give response question paper as "yes" only if it is a valid university exam question paper (e.g., CAT 1, CAT 2, FAT) else give "no" as response
 - extracted text field should only contain lowercase text with no spaces and no newline characters
 - For 'extracted text', limit your transcription to ONLY the very first 650 characters of the document. Do not transcribe the entire page in order to save tokens!
 """
@@ -557,11 +559,25 @@ Rules:
             g_course_code = str(gemini_json.get("course_code") or "").strip()
             g_course_title = str(gemini_json.get("course_title") or "").strip()
             extracted_slot = str(gemini_json.get("slot") or "").strip()
+            g_exam_name = str(gemini_json.get("exam_name") or "").strip()
             gemini_text = str(gemini_json.get("extracted text") or "")
             q_paper_val = str(gemini_json.get("question paper(yes/no)") or "yes").lower()
             
             if q_paper_val == "no":
                 is_question_paper = False
+                
+            if g_exam_name:
+                # Normalize exam name for consistency
+                if re.search(r'CAT[\s-]*1', g_exam_name, re.IGNORECASE):
+                    exam_name = "CAT-1"
+                elif re.search(r'CAT[\s-]*2', g_exam_name, re.IGNORECASE):
+                    exam_name = "CAT-2"
+                elif re.search(r'MID\s*TERM', g_exam_name, re.IGNORECASE):
+                    exam_name = "Midterm"
+                elif re.search(r'FAT|TERM\s*END|END\s*TERM', g_exam_name, re.IGNORECASE):
+                    exam_name = "FAT"
+                else:
+                    exam_name = g_exam_name
                 
             if gemini_text:
                 # Merge the LLM dense text with existing raw text for regex parsing capability in fallback
@@ -631,15 +647,16 @@ Rules:
         elif course_title:
             course_combined = course_title
 
-    # Exam Name Regex Verification (Required since prompt doesn't cover EXAM type)
-    if re.search(r'CAT[\s-]*1', detection_text, re.IGNORECASE):
-        exam_name = "CAT-1"
-    elif re.search(r'CAT[\s-]*2', detection_text, re.IGNORECASE):
-        exam_name = "CAT-2"
-    elif re.search(r'MID\s*TERM', detection_text, re.IGNORECASE):
-        exam_name = "Midterm"
-    elif re.search(r'TERM\s*END|END\s*TERM|FAT', detection_text, re.IGNORECASE):
-        exam_name = "FAT"
+    # Exam Name Regex Verification (Fallback if not found by model)
+    if not exam_name:
+        if re.search(r'CAT[\s-]*1', detection_text, re.IGNORECASE):
+            exam_name = "CAT-1"
+        elif re.search(r'CAT[\s-]*2', detection_text, re.IGNORECASE):
+            exam_name = "CAT-2"
+        elif re.search(r'MID\s*TERM', detection_text, re.IGNORECASE):
+            exam_name = "Midterm"
+        elif re.search(r'TERM\s*END|END\s*TERM|FAT', detection_text, re.IGNORECASE):
+            exam_name = "FAT"
 
     return jsonify({
         "course_combined": course_combined,

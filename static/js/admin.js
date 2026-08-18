@@ -481,7 +481,7 @@ function renderSubjects(filterQuery = '') {
     }
 
     pageSubjects.forEach((data) => {
-        const total = data.cat1.length + data.cat2.length + data.fat.length + data.midterm.length;
+        const total = (data.cat1?.length || 0) + (data.cat2?.length || 0) + (data.fat?.length || 0) + (data.midterm?.length || 0);
         const canOpenPapers = total > 0;
         const cardTitle = data.courseCombined || `${data.courseCode} - ${data.courseTitle}`;
         const card = document.createElement('div');
