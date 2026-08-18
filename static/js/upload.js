@@ -229,9 +229,9 @@ async function handleFiles(files, fromCamera=false) {
     setButtonLoading(secondaryBtn, true, fromCamera ? 'Processing...' : 'Uploading...');
     
     try {
-        const validFiles = files.filter(f => f.type.startsWith('image/'));
+        const validFiles = files.filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
         if (validFiles.length !== files.length) {
-            alert("Only image files are allowed. Unsupported files were ignored.");
+            alert("Only image and PDF files are allowed. Unsupported files were ignored.");
         }
         files = validFiles;
         if (!files.length) {
@@ -240,73 +240,96 @@ async function handleFiles(files, fromCamera=false) {
             return;
         }
 
-        if (pagesArray.length + files.length > 10) {
-            alert("Maximum limit of 10 pages allowed per document. Only the first 10 pages will be kept.");
-            files = files.slice(0, Math.max(0, 10 - pagesArray.length));
-            if (files.length === 0) {
-                setButtonLoading(primaryBtn, false);
-                setButtonLoading(secondaryBtn, false);
-                return;
-            }
-        }
-        
         let lastAddedId = null;
         for (const file of files) {
-            let dataUrl = await fileToDataUrl(file);
+            let rawDataUrls = [];
             
-            dataUrl = await new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const maxSize = 1600;
-                    let w = img.width;
-                    let h = img.height;
-                    
-                    if (w > maxSize || h > maxSize) {
-                        if (w > h) { h = Math.round(h * (maxSize / w)); w = maxSize; }
-                        else { w = Math.round(w * (maxSize / h)); h = maxSize; }
-                    }
-                    
+            if (file.type === 'application/pdf') {
+                if (typeof pdfjsLib === 'undefined') {
+                    alert("PDF processing library not loaded.");
+                    continue;
+                }
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 2.0 });
                     const canvas = document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
                     const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    
-                    let quality = 0.85;
-                    let resUrl = canvas.toDataURL('image/webp', quality);
-                    let kb = Math.round((resUrl.length * 0.75) / 1024);
-                    
-                    while (kb > 200 && quality > 0.3) {
-                        quality -= 0.15;
-                        resUrl = canvas.toDataURL('image/webp', quality);
-                        kb = Math.round((resUrl.length * 0.75) / 1024);
-                    }
-                    
-                    while (kb > 200 && w > 800) {
-                        w = Math.round(w * 0.85);
-                        h = Math.round(h * 0.85);
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                    rawDataUrls.push(canvas.toDataURL('image/png'));
+                }
+            } else {
+                rawDataUrls.push(await fileToDataUrl(file));
+            }
+            
+            let limitReached = false;
+            for (let rawUrl of rawDataUrls) {
+                if (pagesArray.length >= 10) {
+                    alert("Maximum limit of 10 pages allowed per document. Further pages were ignored.");
+                    limitReached = true;
+                    break;
+                }
+                
+                let dataUrl = await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const maxSize = 1600;
+                        let w = img.width;
+                        let h = img.height;
+                        
+                        if (w > maxSize || h > maxSize) {
+                            if (w > h) { h = Math.round(h * (maxSize / w)); w = maxSize; }
+                            else { w = Math.round(w * (maxSize / h)); h = maxSize; }
+                        }
+                        
+                        const canvas = document.createElement('canvas');
                         canvas.width = w;
                         canvas.height = h;
+                        const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
-                        resUrl = canvas.toDataURL('image/webp', quality);
-                        kb = Math.round((resUrl.length * 0.75) / 1024);
-                    }
+                        
+                        let quality = 0.85;
+                        let resUrl = canvas.toDataURL('image/webp', quality);
+                        let kb = Math.round((resUrl.length * 0.75) / 1024);
+                        
+                        while (kb > 200 && quality > 0.3) {
+                            quality -= 0.15;
+                            resUrl = canvas.toDataURL('image/webp', quality);
+                            kb = Math.round((resUrl.length * 0.75) / 1024);
+                        }
+                        
+                        while (kb > 200 && w > 800) {
+                            w = Math.round(w * 0.85);
+                            h = Math.round(h * 0.85);
+                            canvas.width = w;
+                            canvas.height = h;
+                            ctx.drawImage(img, 0, 0, w, h);
+                            resUrl = canvas.toDataURL('image/webp', quality);
+                            kb = Math.round((resUrl.length * 0.75) / 1024);
+                        }
 
-                    resolve(resUrl);
-                };
-                img.src = dataUrl;
-            });
+                        resolve(resUrl);
+                    };
+                    img.src = rawUrl;
+                });
 
-            lastAddedId = 'page_' + Date.now() + Math.random().toString(36).substr(2, 5);
-            pagesArray.push({
-                id: lastAddedId,
-                originalFile: file,
-                originalDataUrl: dataUrl,
-                displayDataUrl: dataUrl,
-                croppedBlob: null,
-                cropPoints: null,
-                rotation: 0
-            });
+                lastAddedId = 'page_' + Date.now() + Math.random().toString(36).substr(2, 5);
+                pagesArray.push({
+                    id: lastAddedId,
+                    originalFile: file,
+                    originalDataUrl: dataUrl,
+                    displayDataUrl: dataUrl,
+                    croppedBlob: null,
+                    cropPoints: null,
+                    rotation: 0
+                });
+            }
+            if (limitReached) break;
         }
         fileInputMulti.value = '';
         cameraInput.value = '';
