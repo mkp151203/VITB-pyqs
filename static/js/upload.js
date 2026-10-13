@@ -1,8 +1,8 @@
-// upload.js — File handling, arrange grid, OCR metadata, PDF generation & Firebase upload
 import { db, storage, collection, addDoc, doc, setDoc, updateDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, increment } from './firebase.js';
 import { checkSimilarityWithDatabase } from './similarity.js';
 import { openCropView, init as initCrop } from './crop.js';
 import { getCurrentUser, onAuthChange } from './auth.js';
+import { isValidCourseCode, isValidCourseTitle, isValidSlot, isValidExamName, hasInjection } from './utils.js';
 
 // === Daily rate limiting (no login needed, localStorage-based) ===
 const RATE_LIMIT = 5;
@@ -590,22 +590,30 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
             showMsg('Please enter both course code and course title for Other.', 'error');
             return;
         }
+        if (!isValidCourseCode(customCourseCode)) {
+            showMsg('Invalid course code format (3-12 alphanumeric characters, e.g. CSE1001).', 'error');
+            return;
+        }
+        if (!isValidCourseTitle(customCourseTitle)) {
+            showMsg('Invalid course title (must be 2-100 characters and contain no HTML/special script characters).', 'error');
+            return;
+        }
         courseCodeVal = customCourseCode;
         courseCombinedVal = `${customCourseCode} - ${customCourseTitle}`;
     }
 
-    if (!courseCombinedVal || courseCombinedVal.trim() === '') {
-        showMsg("Course Name is mandatory. Please select a course.", "error");
+    if (!courseCombinedVal || courseCombinedVal.trim() === '' || hasInjection(courseCombinedVal)) {
+        showMsg("Course Name is mandatory and must not contain HTML or script characters.", "error");
         return;
     }
     
     const examNameVal = document.getElementById('exam-name').value;
-    if (!examNameVal || examNameVal.trim() === '') {
-        showMsg("Exam Name is mandatory. Please select an exam.", "error");
+    if (!examNameVal || !isValidExamName(examNameVal)) {
+        showMsg("Please select a valid exam type.", "error");
         return;
     }
     const slotInfoVal = (document.getElementById('slot-info')?.value || '').trim();
-    if (slotInfoVal && !/^[A-Za-z]\d{2}(\+[A-Za-z]\d{2})*$/.test(slotInfoVal)) {
+    if (slotInfoVal && !isValidSlot(slotInfoVal)) {
         showMsg("Invalid slot format. Must be a letter followed by two numbers (e.g., A11 or A11+B12).", "error");
         return;
     }
@@ -766,6 +774,9 @@ document.getElementById('metadata-form').addEventListener('submit', async (e) =>
                 await setDoc(userDocRef, { 
                     uploadCount: increment(1),
                     lastActive: new Date().toISOString()
+                }, { merge: true });
+                await setDoc(doc(db, 'public_leaderboard', currentUser.uid), {
+                    uploadCount: increment(1)
                 }, { merge: true });
             } catch (e) {
                 console.warn('Failed to increment user metrics:', e);

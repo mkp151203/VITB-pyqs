@@ -16,6 +16,7 @@ import {
     signOut,
     onAuthStateChanged
 } from './firebase.js';
+import { isValidCourseCode, isValidCourseTitle } from './utils.js';
 
 const reportedList = document.getElementById('reported-papers-list');
 const supportList = document.getElementById('support-messages-list');
@@ -201,6 +202,16 @@ async function addCourseToCatalog() {
 
     if (!code || !title) {
         showMessage('Please enter both course code and course title.', 'error');
+        return;
+    }
+
+    if (!isValidCourseCode(code)) {
+        showMessage('Invalid course code format (3-12 alphanumeric characters, e.g. CSE1001).', 'error');
+        return;
+    }
+
+    if (!isValidCourseTitle(title)) {
+        showMessage('Invalid course title (must be 2-100 characters and contain no HTML/special script characters).', 'error');
         return;
     }
 

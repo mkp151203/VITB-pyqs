@@ -1,5 +1,6 @@
 import { db, storage, collection, getDocs, doc, setDoc, deleteDoc, query, where, orderBy, getDoc, increment, ref, deleteObject } from './firebase.js';
 import { getCurrentUser, logoutUser, updateUserName, getUserProfile, updateAnonymousSetting, onAuthChange } from './auth.js';
+import { escapeHtml, sanitizeUrl, isValidUsername, isValidCollectionName } from './utils.js';
 
 let isInitialized = false;
 
@@ -53,6 +54,10 @@ export function initAccount() {
         let name = prompt('Enter a name for the new collection (e.g. winter semester 2026 term-end):');
         if (name && name.trim()) {
             name = name.trim().slice(0, 50);
+            if (!isValidCollectionName(name)) {
+                alert('Invalid collection name. Must be 1-50 characters and contain no HTML or script tags.');
+                return;
+            }
             await createCollection(name);
             loadMyCollections();
         }
@@ -74,22 +79,24 @@ export function initAccount() {
     });
 
     document.getElementById('btn-save-username')?.addEventListener('click', async () => {
-        const newName = document.getElementById('input-edit-username').value.trim().slice(0, 20);
-        if (newName) {
-            try {
-                document.getElementById('btn-save-username').disabled = true;
-                document.getElementById('btn-save-username').innerText = '...';
-                await updateUserName(newName);
-            } catch(e) {
-                console.error(e);
-                alert('Failed to update username');
-            } finally {
-                document.getElementById('btn-save-username').disabled = false;
-                document.getElementById('btn-save-username').innerText = 'Save';
-                document.getElementById('edit-username-container').classList.add('hidden');
-                document.getElementById('account-name').classList.remove('hidden');
-                document.getElementById('btn-edit-username').classList.remove('hidden');
-            }
+        const newName = document.getElementById('input-edit-username').value.trim();
+        if (!isValidUsername(newName)) {
+            alert('Invalid username. Must be 2-30 characters (letters, numbers, spaces, dots, dashes) and cannot contain HTML or script symbols.');
+            return;
+        }
+        try {
+            document.getElementById('btn-save-username').disabled = true;
+            document.getElementById('btn-save-username').innerText = '...';
+            await updateUserName(newName);
+        } catch(e) {
+            console.error(e);
+            alert('Failed to update username');
+        } finally {
+            document.getElementById('btn-save-username').disabled = false;
+            document.getElementById('btn-save-username').innerText = 'Save';
+            document.getElementById('edit-username-container').classList.add('hidden');
+            document.getElementById('account-name').classList.remove('hidden');
+            document.getElementById('btn-edit-username').classList.remove('hidden');
         }
     });
 
@@ -164,8 +171,12 @@ export function initAccount() {
 
     document.getElementById('btn-quick-create-collection')?.addEventListener('click', async () => {
         const input = document.getElementById('new-collection-name');
-        const name = input.value.trim();
+        const name = (input.value || '').trim();
         if (name) {
+            if (!isValidCollectionName(name)) {
+                alert('Invalid collection name. Must be 1-50 characters and contain no HTML or script tags.');
+                return;
+            }
             await createCollection(name);
             input.value = '';
             // Reload modal list
@@ -271,7 +282,7 @@ async function loadMyCollections() {
             div.innerHTML = `
                 <div class="paper-details" style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <h3>${c.name}</h3>
+                        <h3>${escapeHtml(c.name)}</h3>
                         <p style="margin: 4px 0 0; color:#888; font-size: 0.82rem;">${papersCount} paper${papersCount !== 1 ? 's' : ''} saved</p>
                     </div>
                      <span class="material-symbols-outlined" style="font-size:1.4rem; color:#ccc;">chevron_right</span>
@@ -386,15 +397,15 @@ function renderPapers(papers, container, context = 'collections', parentCollecti
         
         div.innerHTML = `
             <div class="paper-details">
-                <h4 style="margin:0 0 4px;">${displayTitle}</h4>
+                <h4 style="margin:0 0 4px;">${escapeHtml(displayTitle)}</h4>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:0.85rem; color:#555;">${p.examName || 'Exam'}</span>
+                    <span style="font-size:0.85rem; color:#555;">${escapeHtml(p.examName || 'Exam')}</span>
                     <span style="font-size:0.8rem; color:#999;">${new Date(p.createdAt).toLocaleDateString()}</span>
                 </div>
                 ${previewHtml}
             </div>
             <div class="paper-actions" style="display:flex; flex-direction:column;">
-                <a href="${fileUrl}" target="_blank" class="btn-dl" style="width:100%; text-align:center; padding:9px;">
+                <a href="${sanitizeUrl(fileUrl)}" target="_blank" class="btn-dl" style="width:100%; text-align:center; padding:9px;">
                     <span class="material-symbols-outlined" style="font-size:1rem; vertical-align:middle;">open_in_new</span> Open Paper
                 </a>
                 ${actionHtml}
@@ -435,6 +446,7 @@ function renderPapers(papers, container, context = 'collections', parentCollecti
                         if (user) {
                             try {
                                 await setDoc(doc(db, 'user_profiles', user.uid), { uploadCount: increment(-1) }, { merge: true });
+                                await setDoc(doc(db, 'public_leaderboard', user.uid), { uploadCount: increment(-1) }, { merge: true });
                             } catch (e) {
                                 console.warn('Failed to decrement upload count', e);
                             }
@@ -506,7 +518,7 @@ export async function openCollectionModal(paper) {
             const div = document.createElement('div');
             div.style = "display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;";
             div.innerHTML = `
-                <div style="font-weight: 500;">${c.name} <span style="font-size:0.8rem;color:#888;">(${(c.paperIds||[]).length})</span></div>
+                <div style="font-weight: 500;">${escapeHtml(c.name)} <span style="font-size:0.8rem;color:#888;">(${(c.paperIds||[]).length})</span></div>
                 <button class="btn btn-sm ${isSaved ? 'btn-secondary' : 'btn-primary'}" ${isSaved ? 'disabled' : ''}>
                     ${isSaved ? 'Saved' : 'Save'}
                 </button>

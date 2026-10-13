@@ -1,6 +1,7 @@
 import { db, collection, getDocs, storage, ref, getDownloadURL } from './firebase.js';
 import { loadCourseCatalog } from './courses.js';
 import { openCollectionModal } from './account.js';
+import { escapeHtml, sanitizeUrl } from './utils.js';
 
 let searchArchives = [];
 let groupedBySubject = {};
@@ -269,11 +270,11 @@ function renderSubjects(filterQuery = '') {
         div.innerHTML = `
             <div class="paper-details" style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <h3>${data.courseTitle}</h3>
+                    <h3>${escapeHtml(data.courseTitle)}</h3>
                     <p style="margin: 4px 0 0; color:#888; font-size: 0.82rem;">${total} paper${total !== 1 ? 's' : ''} available</p>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="btn btn-secondary btn-sm" type="button" data-zip-course="${key}">Download ZIP</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-zip-course="${escapeHtml(key)}">Download ZIP</button>
                     <span class="material-symbols-outlined" style="font-size:1.4rem; color:#ccc; flex-shrink:0;">chevron_right</span>
                 </div>
             </div>
@@ -455,7 +456,7 @@ function renderPapersList(papers) {
         const div = document.createElement('div');
         div.className = 'paper-card';
         
-        const fileUrl = p.fileUrl || '';
+        const fileUrl = sanitizeUrl(p.fileUrl || '');
         const explicitType = (p.fileType || '').toLowerCase();
         const isPdf = explicitType ? explicitType === 'pdf' : fileUrl.toLowerCase().includes('.pdf');
         const isSingleImage = explicitType === 'image' || (!isPdf && (p.pageCount || 1) === 1);
@@ -491,16 +492,18 @@ function renderPapersList(papers) {
             }
         }
 
+        const safeSlot = escapeHtml(getNormalizedSlot(p));
+
         div.innerHTML = `
             <div class="paper-details">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span class="badge">
                         <span class="material-symbols-outlined" style="font-size:0.85rem;margin-right:3px;">${isSingleImage ? 'image' : 'description'}</span>
-                        ${isSingleImage ? 'Single Image' : `${p.pageCount || 1} page${(p.pageCount||1)>1?'s':''}`}
+                        ${isSingleImage ? 'Single Image' : `${Number(p.pageCount) || 1} page${(Number(p.pageCount)||1)>1?'s':''}`}
                     </span>
                     <span style="font-size:0.8rem; color:#999;">${new Date(p.createdAt).toLocaleDateString()}</span>
                 </div>
-                <p style="margin:8px 0 0; color:#777; font-size:0.82rem;">Slot: <strong>${getNormalizedSlot(p)}</strong></p>
+                <p style="margin:8px 0 0; color:#777; font-size:0.82rem;">Slot: <strong>${safeSlot}</strong></p>
                 ${previewHtml}
             </div>
             <div class="paper-actions" style="display:flex; gap:8px;">

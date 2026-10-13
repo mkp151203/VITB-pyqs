@@ -286,14 +286,14 @@
                                 <span class="material-symbols-outlined label-icon">tag</span>
                                 Course Code
                             </label>
-                            <input type="text" id="custom-course-code" name="custom_course_code" placeholder="e.g. CSE1234">
+                            <input type="text" id="custom-course-code" name="custom_course_code" placeholder="e.g. CSE1234" maxlength="12" autocomplete="off">
                         </div>
                         <div class="form-group">
                             <label for="custom-course-title">
                                 <span class="material-symbols-outlined label-icon">edit_note</span>
                                 Course Title
                             </label>
-                            <input type="text" id="custom-course-title" name="custom_course_title" placeholder="e.g. Data Structures">
+                            <input type="text" id="custom-course-title" name="custom_course_title" placeholder="e.g. Data Structures" maxlength="100" autocomplete="off">
                         </div>
                     </div>
 
@@ -316,7 +316,7 @@
                             <span class="material-symbols-outlined label-icon">schedule</span>
                             Slot (Optional)
                         </label>
-                        <input type="text" id="slot-info" name="slot_info" placeholder="e.g. A11+B12">
+                        <input type="text" id="slot-info" name="slot_info" placeholder="e.g. A11+B12" maxlength="30" autocomplete="off">
                     </div>
 
                     <div class="form-group hidden" id="extracted-text-group">
@@ -535,7 +535,7 @@
                 <button class="modal-close" data-close-modal="request" type="button">×</button>
             </div>
             <p class="modal-desc">Post a request so others can upload this paper. Maximum 30 open requests across the website.</p>
-            <input id="request-course" type="text" list="request-course-options" placeholder="Course (e.g. CSE2001 - Data Structures)">
+            <input id="request-course" type="text" list="request-course-options" placeholder="Course (e.g. CSE2001 - Data Structures)" maxlength="120" autocomplete="off">
             <datalist id="request-course-options"></datalist>
             <select id="request-exam" style="margin-top:8px;">
                 <option value="">Select Exam Type</option>

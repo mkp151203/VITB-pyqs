@@ -1,4 +1,5 @@
 import { db, collection, getDocs, query, orderBy, limit } from './firebase.js';
+import { escapeHtml } from './utils.js';
 
 export async function initLeaderboard() {
     const listEl = document.getElementById('leaderboard-list');
@@ -8,7 +9,7 @@ export async function initLeaderboard() {
 
     try {
         const q = query(
-            collection(db, 'user_profiles'),
+            collection(db, 'public_leaderboard'),
             orderBy('uploadCount', 'desc'),
             limit(50)
         );
@@ -48,14 +49,20 @@ export async function initLeaderboard() {
             
             const rankStyle = rank <= 3 ? `font-size: 1.6rem; font-weight: 800; color: ${rankColor}; width: 36px; text-align: center;` : `font-size: 1.2rem; font-weight: 600; color: #888; width: 36px; text-align: center;`;
 
+            const safePhoto = (photoURL && (photoURL.startsWith('https://') || photoURL.startsWith('http://') || photoURL.startsWith('/')))
+                ? escapeHtml(photoURL)
+                : '/static/logo.png';
+            const safeDisplayName = escapeHtml(displayName || 'Anonymous User');
+            const safeUploadCount = Number(uploadCount) || 0;
+
             card.innerHTML = `
                 <div style="${rankStyle}">#${rank}</div>
-                <img src="${photoURL || '/static/logo.png'}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; border: 2px solid #eee;">
+                <img src="${safePhoto}" alt="Avatar" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; border: 2px solid #eee;">
                 <div style="flex: 1; min-width:0; text-align: left;">
                     <h3 style="margin: 0; font-size: 1.05rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${displayName || 'Anonymous User'}
+                        ${safeDisplayName}
                     </h3>
-                    <p style="margin: 4px 0 0; color: #666; font-size: 0.9rem;"><strong>${uploadCount}</strong> ${uploadCount === 1 ? 'paper' : 'papers'} uploaded</p>
+                    <p style="margin: 4px 0 0; color: #666; font-size: 0.9rem;"><strong>${safeUploadCount}</strong> ${safeUploadCount === 1 ? 'paper' : 'papers'} uploaded</p>
                 </div>
             `;
             listEl.appendChild(card);
@@ -68,6 +75,12 @@ export async function initLeaderboard() {
 
     } catch (e) {
         console.error("Failed to load leaderboard", e);
-        listEl.innerHTML = '<div style="text-align: center; color: red; padding: 40px;">Failed to load leaderboard. Firestore might be configuring an index. Please try again in 5 minutes!</div>';
+        if (e?.code === 'permission-denied') {
+            listEl.innerHTML = '<div style="text-align: center; color: #888; padding: 40px;">Leaderboard unavailable. Please ensure the latest rules are published in Firebase Console.</div>';
+        } else if (e?.message && e.message.toLowerCase().includes('index')) {
+            listEl.innerHTML = '<div style="text-align: center; color: #888; padding: 40px;">Firestore is configuring an index. Please try again in 5 minutes!</div>';
+        } else {
+            listEl.innerHTML = '<div style="text-align: center; color: #888; padding: 40px;">No contributors yet! Be the first to upload.</div>';
+        }
     }
 }

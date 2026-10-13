@@ -10,6 +10,8 @@ async function syncUserProfile(user) {
         // First check if fields exist; only set defaults for brand-new profiles
         const existing = await getDoc(profileRef);
         const data = existing.exists() ? existing.data() : {};
+        const isAnon = data.isAnonymous === true;
+
         await setDoc(profileRef, {
             displayName: user.displayName || 'Anonymous',
             photoURL: user.photoURL || '',
@@ -17,6 +19,14 @@ async function syncUserProfile(user) {
             // Only set defaults if not already present (don't overwrite real counts)
             uploadCount: data.uploadCount ?? 0,
             helpedCount: data.helpedCount ?? 0,
+        }, { merge: true });
+
+        // Sync ONLY public, safe display fields to public_leaderboard
+        await setDoc(doc(db, 'public_leaderboard', user.uid), {
+            displayName: isAnon ? 'Anonymous User' : (user.displayName || 'Contributor'),
+            photoURL: isAnon ? '/static/logo.png' : (user.photoURL || '/static/logo.png'),
+            uploadCount: data.uploadCount ?? 0,
+            isAnonymous: isAnon
         }, { merge: true });
     } catch (e) {
         console.warn('Failed to sync user profile to DB', e);
@@ -90,4 +100,9 @@ export async function getUserProfile() {
 export async function updateAnonymousSetting(isAnon) {
     if (!currentUser) throw new Error('No user signed in');
     await setDoc(doc(db, 'user_profiles', currentUser.uid), { isAnonymous: isAnon }, { merge: true });
+    await setDoc(doc(db, 'public_leaderboard', currentUser.uid), {
+        displayName: isAnon ? 'Anonymous User' : (currentUser.displayName || 'Contributor'),
+        photoURL: isAnon ? '/static/logo.png' : (currentUser.photoURL || '/static/logo.png'),
+        isAnonymous: isAnon
+    }, { merge: true });
 }

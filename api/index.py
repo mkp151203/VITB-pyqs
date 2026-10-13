@@ -697,7 +697,7 @@ def proxy_pdf():
         
     try:
         parsed_url = urlparse(url)
-        if parsed_url.hostname not in ['firebasestorage.googleapis.com', 'storage.googleapis.com']:
+        if parsed_url.scheme != 'https' or parsed_url.hostname not in ['firebasestorage.googleapis.com', 'storage.googleapis.com']:
             return 'Invalid or missing URL', 400
     except Exception:
         return 'Invalid or missing URL', 400
@@ -726,7 +726,7 @@ def proxy_file():
         
     try:
         parsed_url = urlparse(url)
-        if parsed_url.hostname not in ['firebasestorage.googleapis.com', 'storage.googleapis.com']:
+        if parsed_url.scheme != 'https' or parsed_url.hostname not in ['firebasestorage.googleapis.com', 'storage.googleapis.com']:
             return 'Invalid or missing URL', 400
     except Exception:
         return 'Invalid or missing URL', 400

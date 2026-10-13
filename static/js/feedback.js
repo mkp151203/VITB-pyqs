@@ -1,4 +1,5 @@
 import { db, collection, addDoc, doc, updateDoc, increment } from './firebase.js';
+import { hasInjection } from './utils.js';
 
 const SUPPORT_MESSAGE_MAX = 500;
 const REPORT_RATE_KEY = 'pyq_report_timestamps';
@@ -166,6 +167,18 @@ export function initFeedback() {
         const message = (supportTextarea?.value || '').trim();
         if (message.length < 10) {
             showMessage('Please enter at least 10 characters.', 'error');
+            setButtonLoading(supportSendBtn, false);
+            return;
+        }
+
+        if (message.length > SUPPORT_MESSAGE_MAX) {
+            showMessage(`Message cannot exceed ${SUPPORT_MESSAGE_MAX} characters.`, 'error');
+            setButtonLoading(supportSendBtn, false);
+            return;
+        }
+
+        if (hasInjection(message)) {
+            showMessage('HTML tags and script injection characters are not allowed.', 'error');
             setButtonLoading(supportSendBtn, false);
             return;
         }

@@ -1,11 +1,31 @@
 import { db, collection, addDoc, getDocs, deleteDoc, doc } from './firebase.js';
 import { loadCourseCatalog } from './courses.js';
+import { escapeHtml } from './utils.js';
 
 const GLOBAL_OPEN_REQUEST_LIMIT = 30;
 const MAX_FULFILLED_REQUESTS = 30;
 const REQUEST_RETENTION_DAYS = 60;
 const REQUEST_USER_KEY = 'pyq_request_user_id';
 const PENDING_REQUEST_KEY = 'pyq_pending_request';
+const REQUEST_RATE_KEY = 'pyq_request_timestamps';
+const MAX_REQUESTS_PER_WINDOW = 3;
+const REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
+function canProceedWithRequestRateLimit() {
+    try {
+        const timestamps = JSON.parse(localStorage.getItem(REQUEST_RATE_KEY) || '[]');
+        const now = Date.now();
+        const recent = timestamps.filter(ts => now - ts < REQUEST_WINDOW_MS);
+        if (recent.length >= MAX_REQUESTS_PER_WINDOW) {
+            return false;
+        }
+        recent.push(now);
+        localStorage.setItem(REQUEST_RATE_KEY, JSON.stringify(recent));
+        return true;
+    } catch {
+        return true;
+    }
+}
 
 function getOrCreateRequesterId() {
     let requesterId = localStorage.getItem(REQUEST_USER_KEY);
@@ -78,10 +98,23 @@ async function loadAndCleanupRequests() {
     const retentionMs = REQUEST_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     const now = Date.now();
 
+    // Auto-purge expired requests
     const oldRequestIds = allRequests
         .filter((item) => {
             const time = getPrimaryRequestTime(item);
             return time > 0 && (now - time) > retentionMs;
+        })
+        .map((item) => item.id);
+
+    // Auto-detect and purge malicious or XSS-laden requests
+    const maliciousRequestIds = allRequests
+        .filter((item) => {
+            const course = String(item.courseCombined || '');
+            const exam = String(item.examName || '');
+            const slot = String(item.slot || '');
+            return /[<>]|javascript:|onload=|onerror=/i.test(course) ||
+                   /[<>]|javascript:|onload=|onerror=/i.test(exam) ||
+                   /[<>]|javascript:|onload=|onerror=/i.test(slot);
         })
         .map((item) => item.id);
 
@@ -93,9 +126,9 @@ async function loadAndCleanupRequests() {
         .slice(MAX_FULFILLED_REQUESTS)
         .map((item) => item.id);
 
-    const idsToDelete = [...new Set([...oldRequestIds, ...overflowFulfilledIds])];
+    const idsToDelete = [...new Set([...oldRequestIds, ...maliciousRequestIds, ...overflowFulfilledIds])];
     if (idsToDelete.length) {
-        await Promise.all(idsToDelete.map((requestId) => deleteDoc(doc(db, 'paper_requests', requestId))));
+        await Promise.allSettled(idsToDelete.map((requestId) => deleteDoc(doc(db, 'paper_requests', requestId))));
     }
 
     const deletedSet = new Set(idsToDelete);
@@ -136,14 +169,20 @@ function renderHelpRequests(requests, container, helpModal) {
     requests.forEach((item) => {
         const card = document.createElement('div');
         card.className = 'paper-card';
+        const courseText = escapeHtml(item.courseCombined || 'Course not specified');
+        const examText = escapeHtml(item.examName || 'Exam type not specified');
+        const slotText = escapeHtml(String(item.slot || 'NA').trim() || 'NA');
+        const dateText = escapeHtml(formatRequestDate(item.createdAt));
+        const safeId = escapeHtml(item.id || '');
+
         card.innerHTML = `
             <div class="paper-details">
-                <h3>${item.courseCombined || 'Course not specified'}</h3>
-                <p style="margin:4px 0 0;color:#777;font-size:0.84rem;">${item.examName || 'Exam type not specified'} · ${formatRequestDate(item.createdAt)}</p>
-                <p style="margin:8px 0 0;color:#666;font-size:0.84rem;">Slot: <strong>${String(item.slot || 'NA').trim() || 'NA'}</strong></p>
+                <h3>${courseText}</h3>
+                <p style="margin:4px 0 0;color:#777;font-size:0.84rem;">${examText} · ${dateText}</p>
+                <p style="margin:8px 0 0;color:#666;font-size:0.84rem;">Slot: <strong>${slotText}</strong></p>
             </div>
             <div class="paper-actions">
-                <button class="btn btn-primary btn-sm" type="button" data-upload-request="${item.id}">Upload for this request</button>
+                <button class="btn btn-primary btn-sm" type="button" data-upload-request="${safeId}">Upload for this request</button>
             </div>
         `;
         container.appendChild(card);
@@ -170,15 +209,19 @@ function renderFulfilledRequests(requests, container) {
     }
 
     requests.forEach((item) => {
-        const slotValue = String(item.slot || 'NA').trim() || 'NA';
+        const slotValue = escapeHtml(String(item.slot || 'NA').trim() || 'NA');
+        const courseText = escapeHtml(item.courseCombined || 'Course not specified');
+        const examText = escapeHtml(item.examName || 'Exam type not specified');
+        const dateText = escapeHtml(formatRequestDate(item.fulfilledAt || item.createdAt));
+
         const card = document.createElement('div');
         card.className = 'paper-card';
         card.innerHTML = `
             <div class="paper-details">
-                <h3>${item.courseCombined || 'Course not specified'}</h3>
-                <p style="margin:4px 0 0;color:#777;font-size:0.84rem;">${item.examName || 'Exam type not specified'}</p>
+                <h3>${courseText}</h3>
+                <p style="margin:4px 0 0;color:#777;font-size:0.84rem;">${examText}</p>
                 <p style="margin:8px 0 0;color:#666;font-size:0.84rem;">Slot: <strong>${slotValue}</strong></p>
-                <p style="margin:8px 0 0;color:#888;font-size:0.82rem;">Fulfilled: ${formatRequestDate(item.fulfilledAt || item.createdAt)}</p>
+                <p style="margin:8px 0 0;color:#888;font-size:0.82rem;">Fulfilled: ${dateText}</p>
             </div>
         `;
         container.appendChild(card);
@@ -302,8 +345,32 @@ export function initRequests() {
             return;
         }
 
+        if (courseCombined.length > 120) {
+            showMessage('Course name is too long (maximum 120 characters).', 'error');
+            return;
+        }
+
+        // Prevent XSS, script injection, and raw HTML tags
+        if (/[<>]|javascript:|onload=|onerror=/i.test(courseCombined) ||
+            /[<>]|javascript:|onload=|onerror=/i.test(examName) ||
+            /[<>]|javascript:|onload=|onerror=/i.test(slot)) {
+            showMessage('HTML tags and script injection characters are strictly forbidden.', 'error');
+            return;
+        }
+
+        const allowedExams = ['CAT-1', 'CAT-2', 'FAT', 'Midterm', ''];
+        if (!allowedExams.includes(examName)) {
+            showMessage('Please select a valid exam type.', 'error');
+            return;
+        }
+
         if (slot && !/^[A-Za-z]\d{2}(\+[A-Za-z]\d{2})*$/.test(slot)) {
             showMessage('Invalid slot format. Must be a letter followed by two numbers (e.g., A11 or A11+B12).', 'error');
+            return;
+        }
+
+        if (!canProceedWithRequestRateLimit()) {
+            showMessage('Too many requests submitted. Please wait a few minutes before posting again.', 'error');
             return;
         }
 

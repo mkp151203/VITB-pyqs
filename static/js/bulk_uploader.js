@@ -1,5 +1,6 @@
 import { auth, db, storage, collection, addDoc, getDoc, doc, onAuthStateChanged, ref, uploadBytes, getDownloadURL } from './firebase.js';
 import { checkSimilarityWithDatabase } from './similarity.js';
+import { isValidExamName, isValidSlot, hasInjection } from './utils.js';
 
 const folderInput = document.getElementById('folder-input');
 const bulkImageList = document.getElementById('bulk-image-list');
@@ -540,17 +541,18 @@ btnUploadBatch.addEventListener('click', async () => {
     const courseCombined = (reviewCourse.value || '').trim();
     const examName = (reviewExam.value || '').trim();
     const slotInfo = ((reviewSlot?.value || '').trim() || 'NA').toUpperCase();
-    if (!courseCombined) {
-        showMsg('Course is required.', 'error');
+
+    if (!courseCombined || hasInjection(courseCombined) || courseCombined.length > 120) {
+        showMsg('Valid course name is required (max 120 chars, no HTML/script tags).', 'error');
         return;
     }
     const slotInfoVal = (reviewSlot?.value || '').trim();
-    if (slotInfoVal && !/^[A-Za-z]\d{2}(\+[A-Za-z]\d{2})*$/.test(slotInfoVal)) {
+    if (slotInfoVal && !isValidSlot(slotInfoVal)) {
         showMsg('Invalid slot format. Must be a letter followed by two numbers (e.g., A11 or A11+B12).', 'error');
         return;
     }
-    if (!examName) {
-        showMsg('Exam type is required.', 'error');
+    if (!examName || !isValidExamName(examName)) {
+        showMsg('Valid exam type is required.', 'error');
         return;
     }
 

@@ -1,0 +1,184 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if requesting user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Check if user is an admin
+    function isAdmin() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+    }
+
+    // Helper: Verify string does not contain HTML tags or script injection
+    function isSafeString(val, maxLen) {
+      return val is string 
+        && val.size() <= maxLen 
+        && !val.matches('.*[<>].*');
+    }
+
+    // ==========================================
+    // 1. Admin Users Collection
+    // ==========================================
+    match /admin_users/{userId} {
+      // Only the logged-in user can check their own admin status, or existing admins
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Admin list is strictly read-only from client (managed in Firebase Console)
+      allow write: if false;
+    }
+
+    // ==========================================
+    // 2. Question Papers Collection
+    // ==========================================
+    match /question_papers_multi/{paperId} {
+      // Anyone can search and view papers
+      allow read: if true;
+
+      // Anyone (guest or student) can upload a paper, but data must be valid
+      allow create: if isSafeString(request.resource.data.courseTitle, 120)
+                    && isSafeString(request.resource.data.courseCode, 15)
+                    && request.resource.data.examName in ['CAT-1', 'CAT-2', 'FAT', 'Midterm']
+                    && (!('slot' in request.resource.data) || isSafeString(request.resource.data.slot, 30))
+                    && request.resource.data.fileUrl is string
+                    && request.resource.data.fileType in ['pdf', 'image'];
+
+      // Allow users reporting a paper to increment reportedCount, or admins to update
+      allow update: if isAdmin() 
+                    || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reportedCount', 'lastReportedAt']));
+
+      // Only the original uploader (if signed in) or an admin can delete a paper
+      allow delete: if isAdmin() 
+                    || (isAuthenticated() && resource.data.uploadedBy == request.auth.uid);
+    }
+
+    // ==========================================
+    // 3. Courses Catalog Collection
+    // ==========================================
+    match /courses_catalog/{courseId} {
+      // Anyone can read catalog courses for search suggestions
+      allow read: if true;
+
+      // Admins or paper uploaders adding a new course with valid format
+      allow create, update: if isAdmin()
+                            || (isSafeString(request.resource.data.courseCode, 15)
+                                && isSafeString(request.resource.data.courseTitle, 100));
+
+      // Only admins can delete from the course catalog
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 4. Paper Requests Collection (PREVENTS XSS POPUP HACK)
+    // ==========================================
+    match /paper_requests/{requestId} {
+      // Anyone can see requests in "Help Others" and "Fulfilled" popups
+      allow read: if true;
+
+      // Anyone can post a request, but HTML/scripts are STRICTLY BLOCKED
+      allow create: if isSafeString(request.resource.data.courseCombined, 120)
+                    && request.resource.data.status == 'open'
+                    && (!('slot' in request.resource.data) || isSafeString(request.resource.data.slot, 30))
+                    && request.resource.data.examName in ['CAT-1', 'CAT-2', 'FAT', 'Midterm', ''];
+
+      // Allow marking a request as fulfilled upon uploading a paper
+      allow update: if isAdmin()
+                    || (request.resource.data.status == 'fulfilled'
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                            'status', 'fulfilledAt', 'fulfilledPaperId', 'fulfilledCourseCombined', 'fulfilledExamName'
+                        ]));
+
+      // Admins or automated cleanup
+      allow delete: if isAdmin() || (resource.data.status == 'fulfilled');
+    }
+
+    // ==========================================
+    // 5. User Profiles (STRICTLY PRIVATE)
+    // ==========================================
+    match /user_profiles/{userId} {
+      // STRICTLY PRIVATE: Only the account owner can read their own profile.
+      // This completely blocks hackers from viewing other users' lastActive, timestamps, real names, and IDs!
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Each student can only modify their own profile
+      allow create, update: if isAuthenticated() 
+                            && request.auth.uid == userId
+                            && (!('displayName' in request.resource.data) || isSafeString(request.resource.data.displayName, 40));
+
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 6. Public Leaderboard (Sanitized public stats only)
+    // ==========================================
+    match /public_leaderboard/{userId} {
+      // Anyone can read top contributor rankings
+      allow read: if true;
+
+      // Only owner can update their public stats, strictly limited to public fields
+      allow create, update: if isAuthenticated() 
+                            && request.auth.uid == userId
+                            && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'uploadCount', 'isAnonymous'])
+                            && isSafeString(request.resource.data.displayName, 40)
+                            && request.resource.data.uploadCount is number;
+
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 6. User Collections (Personal folders)
+    // ==========================================
+    match /user_collections/{collectionId} {
+      // Students can only see their own private folders
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Students can only create collections for themselves
+      allow create: if isAuthenticated() 
+                    && request.resource.data.userId == request.auth.uid
+                    && isSafeString(request.resource.data.name, 50);
+
+      // Students can only modify or delete their own collections
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // 7. Paper Reports Collection
+    // ==========================================
+    match /paper_reports/{reportId} {
+      // Only admins can see reports
+      allow read: if isAdmin();
+
+      // Users can submit a report with valid paper ID
+      allow create: if request.resource.data.paperId is string
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() <= 200;
+
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 8. Support Messages Collection
+    // ==========================================
+    match /support_messages/{msgId} {
+      // Only admins can read inbox messages
+      allow read: if isAdmin();
+
+      // Users can submit a message (10 to 500 chars, no HTML/scripts)
+      allow create: if request.resource.data.message is string
+                    && request.resource.data.message.size() >= 10
+                    && isSafeString(request.resource.data.message, 500);
+
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // Default Fallback: Block all other access
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
